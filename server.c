@@ -10,12 +10,12 @@
 #include <sys/socket.h>
 #define PORT 5000 // The port which is communicate with server
 #define BACKLOG 10
-#define LENGTH 512 // Buffer length
-int main ()
+#define LENGTH 65536 // Buffer length
+int main (int argc, char * argv[])
 {
-  char* f_name = "send.txt";
   char sdbuf[LENGTH]; // Send buffer
 
+  char *f_name;
   int sockfd; // Socket file descriptor
   int nsockfd; // New Socket file descriptor
   int optval = 1;
@@ -23,6 +23,14 @@ int main ()
   int sin_size; // to store struct size
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
+
+  if(argc != 2){
+    printf("Usage:\t./server <file to send>\n");
+    return(EXIT_FAILURE);
+  }
+  else {
+    f_name = argv[argc-1];
+  }
 
   /* Get the Socket file descriptor */
   if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
