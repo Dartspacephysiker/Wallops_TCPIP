@@ -12,6 +12,13 @@
 #define LENGTH 512 // Buffer length
 int main(int argc, char *argv[])
 {
+  if( argc != 2 ) {
+    printf("Usage: ./client <server_ip_addr>");
+  } else
+    {
+      printf("Aiming to connect to server %s...\n",argv[argc-1]);
+    }
+
   char* f_name = "receive.txt";
   FILE *fp = fopen(f_name, "a");
 
@@ -28,7 +35,8 @@ int main(int argc, char *argv[])
   /* Fill the socket address struct */
   remote_addr.sin_family = AF_INET; 
   remote_addr.sin_port = htons(PORT); 
-  inet_pton(AF_INET, "127.0.0.1", &remote_addr.sin_addr); 
+  //  inet_pton(AF_INET, "10.170.26.78", &remote_addr.sin_addr); 
+  inet_pton(AF_INET, argv[argc-1], &remote_addr.sin_addr); 
   bzero(&(remote_addr.sin_zero), 8);
   /* Try to connect the remote */
   if (connect(sockfd, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr)) == -1)
