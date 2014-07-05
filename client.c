@@ -1,4 +1,5 @@
-/* Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp-on-linux'
+/* client.c 
+Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp-on-linux'
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,31 +59,58 @@ int main(int argc, char *argv[])
       int success = 0;
       while(success == 0)
 	{
-	  while(f_block_sz = recv(sockfd, revbuf, LENGTH, 0))
+	  /*********************************************/
+	  sin_size = sizeof(struct sockaddr_in);
+
+	  printf("[client] send %s to the server...", f_name);
+	  FILE *fp = fopen(f_name, "r");
+	  if(fp == NULL)
 	    {
-	      if(f_block_sz < 0)
+	      printf("ERROR: File %s not found.\n", f_name);
+	      exit(1);
+	    }
+	  bzero(sdbuf, LENGTH);
+	  int f_block_sz;
+	  while((f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp))>0)
+	    {
+	      if(send(sockfd, sdbuf, f_block_sz, 0) < 0)
 		{
-		  printf("Receive file error.\n");
+		  printf("ERROR: Failed to send file %s.\n", f_name);
 		  break;
 		}
-	      else if(f_block_sz == 0)
-		{
-		  printf("[client] connection lost.\n");
-		  break;
-		}
-	      int write_sz = fwrite(revbuf, sizeof(char), f_block_sz, fp);
-	      if(write_sz < f_block_sz)
-		{
-		  printf("File write failed.\n");
-		  break;
-		}
-	      bzero(revbuf, LENGTH);
+	      bzero(sdbuf, LENGTH);
 	    }
 	  printf("ok!\n");
 	  success = 1;
-	  fclose(fp);
+	  /*********************************************/
 	}
-    }
+
+      /*original*/
+    /* 	  while(f_block_sz = recv(sockfd, revbuf, LENGTH, 0)) */
+    /* 	    { */
+    /* 	      if(f_block_sz < 0) */
+    /* 		{ */
+    /* 		  printf("Receive file error.\n"); */
+    /* 		  break; */
+    /* 		} */
+    /* 	      else if(f_block_sz == 0) */
+    /* 		{ */
+    /* 		  printf("[client] connection lost.\n"); */
+    /* 		  break; */
+    /* 		} */
+    /* 	      int write_sz = fwrite(revbuf, sizeof(char), f_block_sz, fp); */
+    /* 	      if(write_sz < f_block_sz) */
+    /* 		{ */
+    /* 		  printf("File write failed.\n"); */
+    /* 		  break; */
+    /* 		} */
+    /* 	      bzero(revbuf, LENGTH); */
+    /* 	    } */
+    /* 	  printf("ok!\n"); */
+    /* 	  success = 1; */
+    /* 	  fclose(fp); */
+    /* 	} */
+    /* } */
   close (sockfd);
   return (0);
 }

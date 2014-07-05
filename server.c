@@ -1,4 +1,5 @@
-/* Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp-on-linux'
+/* server.c
+Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp-on-linux'
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -70,24 +71,26 @@ int main (int argc, char * argv[])
       if ((nsockfd = accept(sockfd, (struct sockaddr *)&addr_remote, &sin_size)) == -1) 
 	printf ("ERROR: Obtain new Socket Descriptor error.\n");
       //      else printf ("[server] server has got connect from %s.\n", inet_ntoa(addr_remote.sin_addr));
-
-      printf("[server] send %s to the client...", f_name);
-      FILE *fp = fopen(f_name, "r");
-      if(fp == NULL)
+ 
+      while(f_block_sz = recv(nsockfd, revbuf, LENGTH, 0))
 	{
-	  printf("ERROR: File %s not found.\n", f_name);
-	  exit(1);
-	}
-      bzero(sdbuf, LENGTH);
-      int f_block_sz;
-      while((f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp))>0)
-	{
-	  if(send(nsockfd, sdbuf, f_block_sz, 0) < 0)
+	  if(f_block_sz < 0)
 	    {
-	      printf("ERROR: Failed to send file %s.\n", f_name);
+	      printf("Receive file error.\n");
 	      break;
 	    }
-	  bzero(sdbuf, LENGTH);
+	  else if(f_block_sz == 0)
+	    {
+	      printf("[server] connection lost.\n");
+	      break;
+	    }
+	  int write_sz = fwrite(revbuf, sizeof(char), f_block_sz, fp);
+	  if(write_sz < f_block_sz)
+	    {
+	      printf("File write failed.\n");
+	      break;
+	    }
+	  bzero(revbuf, LENGTH);
 	}
       printf("ok!\n");
       success = 1;
@@ -96,3 +99,37 @@ int main (int argc, char * argv[])
       while(waitpid(-1, NULL, WNOHANG) > 0);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+      /*original */
+      /* printf("[server] send %s to the client...", f_name); */
+      /* FILE *fp = fopen(f_name, "r"); */
+      /* if(fp == NULL) */
+      /* 	{ */
+      /* 	  printf("ERROR: File %s not found.\n", f_name); */
+      /* 	  exit(1); */
+      /* 	} */
+      /* bzero(sdbuf, LENGTH); */
+      /* int f_block_sz; */
+      /* while((f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp))>0) */
+      /* 	{ */
+      /* 	  if(send(nsockfd, sdbuf, f_block_sz, 0) < 0) */
+      /* 	    { */
+      /* 	      printf("ERROR: Failed to send file %s.\n", f_name); */
+      /* 	      break; */
+      /* 	    } */
+      /* 	  bzero(sdbuf, LENGTH); */
+      /* 	} */
+//    }
+//}
