@@ -13,18 +13,20 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #define LENGTH 512 // Buffer length
 int main(int argc, char *argv[])
 {
-  if( argc != 2 ) {
-    printf("Usage: ./client <server_ip_addr>");
+  char* f_name;
+
+  if( argc != 3 ) {
+    printf("Usage: ./client <server_ip_addr> <file to send>");
   } else
     {
-      printf("Aiming to connect to server %s...\n",argv[argc-1]);
+      printf("Aiming to connect to server %s and send %s...\n",argv[argc-2], argv[argc-1]);
+      f_name = argv[argc-1];
     }
 
-  char* f_name = "receive.txt";
-  FILE *fp = fopen(f_name, "a");
+  FILE *fp = fopen(f_name, "r");
 
   int sockfd; // Socket file descriptor
-  char revbuf[LENGTH]; // Receiver buffer
+  char sdbuf[LENGTH]; // Send buffer
   struct sockaddr_in remote_addr; 
 
   /* Get the Socket file descriptor */
@@ -54,24 +56,15 @@ int main(int argc, char *argv[])
   }
   else
     {
-      bzero(revbuf, LENGTH);
-      int f_block_sz = 0;
+      bzero(sdbuf, LENGTH);
       int success = 0;
       while(success == 0)
 	{
 	  /*********************************************/
-	  sin_size = sizeof(struct sockaddr_in);
-
 	  printf("[client] send %s to the server...", f_name);
-	  FILE *fp = fopen(f_name, "r");
-	  if(fp == NULL)
-	    {
-	      printf("ERROR: File %s not found.\n", f_name);
-	      exit(1);
-	    }
 	  bzero(sdbuf, LENGTH);
 	  int f_block_sz;
-	  while((f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp))>0)
+	  while( ( f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp) ) >0 )
 	    {
 	      if(send(sockfd, sdbuf, f_block_sz, 0) < 0)
 		{
@@ -82,9 +75,10 @@ int main(int argc, char *argv[])
 	    }
 	  printf("ok!\n");
 	  success = 1;
+	  fclose(fp);
 	  /*********************************************/
 	}
-
+    }
       /*original*/
     /* 	  while(f_block_sz = recv(sockfd, revbuf, LENGTH, 0)) */
     /* 	    { */

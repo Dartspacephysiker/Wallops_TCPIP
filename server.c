@@ -14,7 +14,7 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #define LENGTH 65536 // Buffer length
 int main (int argc, char * argv[])
 {
-  char sdbuf[LENGTH]; // Send buffer
+  char revbuf[LENGTH]; // Send buffer
 
   char *f_name;
   int sockfd; // Socket file descriptor
@@ -22,16 +22,24 @@ int main (int argc, char * argv[])
   int optval = 1;
   int num;
   int sin_size; // to store struct size
+
+  /* For keeping track of how much gets sent */
+  int imod = 10;
+  long int i = 0;      
+  long long int tot_write_sz = 0;
+
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
 
   if(argc != 2){
-    printf("Usage:\t./server <file to send>\n");
+    printf("Usage:\t./server <name for received file>\n");
     return(EXIT_FAILURE);
   }
   else {
     f_name = argv[argc-1];
   }
+
+  FILE *fp = fopen(f_name, "r");
 
   /* Get the Socket file descriptor */
   if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
@@ -63,6 +71,7 @@ int main (int argc, char * argv[])
     }
   else printf ("[server] listening the port %d sucessfully.\n", PORT);
   int success = 0;
+  int f_block_sz = 0;
   while(success == 0)
     {
       sin_size = sizeof(struct sockaddr_in);
@@ -71,7 +80,6 @@ int main (int argc, char * argv[])
       if ((nsockfd = accept(sockfd, (struct sockaddr *)&addr_remote, &sin_size)) == -1) 
 	printf ("ERROR: Obtain new Socket Descriptor error.\n");
       //      else printf ("[server] server has got connect from %s.\n", inet_ntoa(addr_remote.sin_addr));
- 
       while(f_block_sz = recv(nsockfd, revbuf, LENGTH, 0))
 	{
 	  if(f_block_sz < 0)
@@ -91,27 +99,20 @@ int main (int argc, char * argv[])
 	      break;
 	    }
 	  bzero(revbuf, LENGTH);
+	  tot_write_sz += write_sz;
+	  if(i % imod == 0)
+	    {
+	      printf("Received %li bytes\n", write_sz);
+	    }
 	}
       printf("ok!\n");
+      printf("Sent %lli bytes", tot_write_sz);
       success = 1;
       close(nsockfd);
       printf("[server] connection closed.\n");
       while(waitpid(-1, NULL, WNOHANG) > 0);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
       /*original */
       /* printf("[server] send %s to the client...", f_name); */
       /* FILE *fp = fopen(f_name, "r"); */
