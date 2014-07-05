@@ -16,11 +16,11 @@ int main(int argc, char *argv[])
   char* f_name;
 
   if( argc != 3 ) {
-    printf("Usage: ./client <server_ip_addr> <file to send>");
+    printf("Usage: ./client <server_ip_addr> <file to send>\n");
     exit(EXIT_FAILURE);
   } else
     {
-      printf("Aiming to connect to server %s and send %s...\n",argv[argc-2], argv[argc-1]);
+      printf("File to send: %s\nAttempting to connect to server: %s\n",argv[argc-1], argv[argc-2]);
       f_name = argv[argc-1];
     }
 
@@ -48,9 +48,8 @@ int main(int argc, char *argv[])
       printf ("ERROR: Failed to connect to the host!\n");
       return (0);
     }
-  else printf("[client] connected to server at port %d...ok!\n", PORT);
-  //printf ("OK: Have connected to %s\n",argv[1]);
-  printf("[client] receive file sent by server to %s...",f_name);
+  else printf("[client] connected to server at port %d...OK!\n", PORT);
+  printf("[client] sending to server: %s...\n",f_name);
   if(fp == NULL) {
     printf("File %s cannot be opened.\n", f_name);
     exit(errno);
@@ -62,19 +61,20 @@ int main(int argc, char *argv[])
       while(success == 0)
 	{
 	  /*********************************************/
-	  printf("[client] send %s to the server...", f_name);
+	  printf("[client] Now sending %s to the server...", f_name);
 	  bzero(sdbuf, LENGTH);
 	  int f_block_sz;
+	  int bytes_sent;
 	  while( ( f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp) ) >0 )
 	    {
-	      if(send(sockfd, sdbuf, f_block_sz, 0) < 0)
+	      if( ( bytes_sent = send(sockfd, sdbuf, f_block_sz, 0) ) < 0)
 		{
 		  printf("ERROR: Failed to send file %s.\n", f_name);
 		  break;
 		}
 	      bzero(sdbuf, LENGTH);
 	    }
-	  printf("ok!\n");
+	  printf("OK!\n");
 	  success = 1;
 	  fclose(fp);
 	  /*********************************************/

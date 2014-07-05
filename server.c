@@ -115,8 +115,9 @@ int main (int argc, char * argv[])
       success = 1;
       close(nsockfd);
       printf("[server] connection closed.\n");
-      while(waitpid(-1, NULL, WNOHANG) > 0);
     }
+      fclose(fp);
+      return(0);
 }
       /*original */
       /* printf("[server] send %s to the client...", f_name); */
