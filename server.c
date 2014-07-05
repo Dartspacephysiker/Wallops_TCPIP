@@ -39,7 +39,12 @@ int main (int argc, char * argv[])
     f_name = argv[argc-1];
   }
 
-  FILE *fp = fopen(f_name, "r");
+  FILE *fp = fopen(f_name, "w");
+  if(fp == NULL)
+    {
+      fprintf(stderr,"Gerrorg. Couldn't open %s.\nDying...\n",f_name);
+      return(EXIT_FAILURE);
+    }
 
   /* Get the Socket file descriptor */
   if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
@@ -106,7 +111,7 @@ int main (int argc, char * argv[])
 	    }
 	}
       printf("ok!\n");
-      printf("Sent %lli bytes", tot_write_sz);
+      printf("Received %lli total bytes", tot_write_sz);
       success = 1;
       close(nsockfd);
       printf("[server] connection closed.\n");

@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
 
   if( argc != 3 ) {
     printf("Usage: ./client <server_ip_addr> <file to send>");
+    exit(EXIT_FAILURE);
   } else
     {
       printf("Aiming to connect to server %s and send %s...\n",argv[argc-2], argv[argc-1]);
