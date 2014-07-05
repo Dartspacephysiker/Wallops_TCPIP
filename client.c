@@ -15,6 +15,8 @@ int main(int argc, char *argv[])
 {
   char* f_name;
 
+  int  imod = 10;
+
   if( argc != 3 ) {
     printf("Usage: ./client <server_ip_addr> <file to send>\n");
     exit(EXIT_FAILURE);
@@ -64,7 +66,9 @@ int main(int argc, char *argv[])
 	  printf("[client] Now sending %s to the server...", f_name);
 	  bzero(sdbuf, LENGTH);
 	  int f_block_sz;
+	  int i = 0;
 	  int bytes_sent;
+	  long long int tot_bytes_sent = 0;
 	  while( ( f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp) ) >0 )
 	    {
 	      if( ( bytes_sent = send(sockfd, sdbuf, f_block_sz, 0) ) < 0)
@@ -72,11 +76,17 @@ int main(int argc, char *argv[])
 		  printf("ERROR: Failed to send file %s.\n", f_name);
 		  break;
 		}
+	      if( ( i++ % imod ) == 0)
+		{
+		  printf("Sent %i bytes\n",bytes_sent);
+		}
+	      tot_bytes_sent += bytes_sent;
 	      bzero(sdbuf, LENGTH);
 	    }
 	  printf("OK!\n");
 	  success = 1;
 	  fclose(fp);
+	  printf("Sent %lli total bytes\n",tot_bytes_sent);
 	  /*********************************************/
 	}
     }
