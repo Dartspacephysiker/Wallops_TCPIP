@@ -97,7 +97,7 @@ int main (int argc, char * argv[])
 	      printf("[server] connection lost.\n");
 	      break;
 	    }
-	  int write_sz = fwrite(revbuf, sizeof(char), f_block_sz, fp);
+	  long int write_sz = fwrite(revbuf, sizeof(char), f_block_sz, fp);
 	  if(write_sz < f_block_sz)
 	    {
 	      printf("File write failed.\n");
