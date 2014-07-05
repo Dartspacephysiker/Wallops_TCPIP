@@ -18,12 +18,12 @@ int main(int argc, char *argv[])
   int  imod = 10;
 
   if( argc != 3 ) {
-    printf("Usage: ./client <server_ip_addr> <file to send>\n");
+    printf("Usage: ./client <file to send> <server_ip_addr>\n");
     exit(EXIT_FAILURE);
   } else
     {
-      printf("File to send: %s\nAttempting to connect to server: %s\n",argv[argc-1], argv[argc-2]);
-      f_name = argv[argc-1];
+      printf("File to send: %s\nAttempting to connect to server: %s\n",argv[argc-2], argv[argc-1]);
+      f_name = argv[argc-2];
     }
 
   FILE *fp = fopen(f_name, "r");
