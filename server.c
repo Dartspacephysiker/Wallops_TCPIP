@@ -26,7 +26,7 @@ int main (int argc, char * argv[])
 
   if(argc != 2){
     printf("Usage:\t./server <file to send>\n");
-    return(EXIT_FAILURE);
+    return(EXIT_SUCCESS);
   }
   else {
     f_name = argv[argc-1];

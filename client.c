@@ -13,7 +13,8 @@
 int main(int argc, char *argv[])
 {
   if( argc != 2 ) {
-    printf("Usage: ./client <server_ip_addr>");
+    printf("Usage: ./client <server_ip_addr>\n");
+    return(EXIT_SUCCESS);
   } else
     {
       printf("Aiming to connect to server %s...\n",argv[argc-1]);
