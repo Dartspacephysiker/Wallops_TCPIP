@@ -15,6 +15,8 @@ int main(int argc, char *argv[])
 {
   char* f_name;
 
+  int err;
+
   int  imod = 10;
 
   if( argc != 3 ) {
@@ -42,7 +44,11 @@ int main(int argc, char *argv[])
   remote_addr.sin_family = AF_INET; 
   remote_addr.sin_port = htons(PORT); 
   //  inet_pton(AF_INET, "10.170.26.78", &remote_addr.sin_addr); 
-  inet_pton(AF_INET, argv[argc-1], &remote_addr.sin_addr); 
+  if( inet_pton(AF_INET, argv[argc-1], &remote_addr.sin_addr ) != 1 )
+    {
+      fprintf(stderr,"Bad address provided!\nCould not convert '%s' to valid binary IPv4 address...\n",argv[argc-1]);
+      return(EXIT_FAILURE);
+    } 
   bzero(&(remote_addr.sin_zero), 8);
   /* Try to connect the remote */
   if (connect(sockfd, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr)) == -1)
