@@ -26,7 +26,7 @@ int main (int argc, char * argv[])
 
   if(argc != 2){
     printf("Usage:\t./server <file to send>\n");
-    return(EXIT_FAILURE);
+    return(EXIT_SUCCESS);
   }
   else {
     f_name = argv[argc-1];
@@ -93,6 +93,6 @@ int main (int argc, char * argv[])
       success = 1;
       close(nsockfd);
       printf("[server] connection closed.\n");
-      while(waitpid(-1, NULL, WNOHANG) > 0);
+      return(EXIT_SUCCESS);
     }
 }
