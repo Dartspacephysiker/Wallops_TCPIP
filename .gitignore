@@ -1,0 +1,4 @@
+# object files
+*.o
+# link to datadir
+Wallops_TCPdata

@@ -3,7 +3,6 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
 #include <string.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -119,24 +118,3 @@ int main (int argc, char * argv[])
       fclose(fp);
       return(0);
 }
-      /*original */
-      /* printf("[server] send %s to the client...", f_name); */
-      /* FILE *fp = fopen(f_name, "r"); */
-      /* if(fp == NULL) */
-      /* 	{ */
-      /* 	  printf("ERROR: File %s not found.\n", f_name); */
-      /* 	  exit(1); */
-      /* 	} */
-      /* bzero(sdbuf, LENGTH); */
-      /* int f_block_sz; */
-      /* while((f_block_sz = fread(sdbuf, sizeof(char), LENGTH, fp))>0) */
-      /* 	{ */
-      /* 	  if(send(nsockfd, sdbuf, f_block_sz, 0) < 0) */
-      /* 	    { */
-      /* 	      printf("ERROR: Failed to send file %s.\n", f_name); */
-      /* 	      break; */
-      /* 	    } */
-      /* 	  bzero(sdbuf, LENGTH); */
-      /* 	} */
-//    }
-//}
