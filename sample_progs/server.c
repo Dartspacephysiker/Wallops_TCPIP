@@ -13,13 +13,12 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #define LENGTH 65536 // Buffer length
 int main (int argc, char * argv[])
 {
-  char revbuf[LENGTH]; // Send buffer
+  char revbuf[LENGTH]; // Receive buffer
 
   char *f_name;
   int sockfd; // Socket file descriptor
   int nsockfd; // New Socket file descriptor
   int optval = 1;
-  int num;
   int sin_size; // to store struct size
 
   /* For keeping track of how much gets sent */
@@ -53,6 +52,7 @@ int main (int argc, char * argv[])
     }
   else printf ("[server] obtain socket descriptor successfully.\n");
   setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
   /* Fill the local socket address struct */
   addr_local.sin_family = AF_INET; // Protocol Family
   addr_local.sin_port = htons(PORT); // Port number
@@ -109,7 +109,7 @@ int main (int argc, char * argv[])
 	      printf("Received %li bytes\n", write_sz);
 	    }
 	}
-      printf("ok!\n");
+      printf("OK!\n");
       printf("Received %lli total bytes", tot_write_sz);
       success = 1;
       close(nsockfd);

@@ -1,16 +1,17 @@
 /* tcp_player
- *  ->A shameless and complete bastardization of fscc_acq, 
- *      which was already an insult to its parent, qusb_acq
+ *  ->The latest episode in what has become a saga of bastardizing qusb_acq 
+ *  
  *    
  *    
  *
- * se creó y encargó : Jul 10 (Sarah's birthday), 2014
+ * se creó y encargó : Jul 14 (four days post-Sarah's birthday), 2014
  *
  *
  */
 
 #define _GNU_SOURCE
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -38,25 +39,16 @@
 #define EEPP_FILE 8
 #define EEPP_THREAD 9
 #define MIN_BYTES_READ 100
+#define BACKLOG 10
 
 static bool running = true;
 
 int main(int argc, char **argv)
 {
-  struct player_opt o;
-
-  
+  struct player_opt o;  
 
   init_opt(&o);
   parse_opt(&o, argc, argv);
-
-  e = init_tcp(
-
-  if ( o.ports[0] && o.ports[0][0] == '\0' ) {
-      fprintf(stderr,"No port number provided. Use option -p on command line, or -h to see options.\n");
-      exit(EXIT_FAILURE);
-    }
-
 
   signal(SIGINT, do_depart);
 
@@ -70,7 +62,6 @@ void tcp_play(struct player_opt o) {
   int tret, ret, rtdsize = 0;
   struct tcp_player_ptargs *thread_args;
   pthread_t *data_threads;
-  //	pthread_t rtd_thread;
     
   short int **rtdframe, *rtdout = NULL;
   struct header_info header;
@@ -94,7 +85,7 @@ void tcp_play(struct player_opt o) {
     printf("RTD");
     
     rtdsize = o.rtdsize * sizeof(short int);
-    if (rtdsize > 2*o.acqsize) printf("RTD Total Size too big!\n");
+    if (rtdsize > 2*o.revbufsize) printf("RTD Total Size too big!\n");
     else printf(" (%i", o.rtdsize);
     if (1024*o.rtdavg > rtdsize) printf("Too many averages for given RTD size.\n");
     else printf("/%iavg)", o.rtdavg);
@@ -163,7 +154,7 @@ void tcp_play(struct player_opt o) {
     }
     
 
-    printf("file %s...", o.ports[i]); fflush(stdout);
+    printf("Port %u...", o.ports[i]); fflush(stdout);
     thread_args[i].o = o;
     thread_args[i].retval = 0;
     thread_args[i].running = &running;
@@ -221,7 +212,7 @@ void tcp_play(struct player_opt o) {
       tret = thread_args[i].retval;
       if (ret == 0) {
 	active_threads--;
-	if (tret) printf("file %s error: %i...", o.ports[i], tret);
+	if (tret) printf("Port %u error: %i...", o.ports[i], tret);
 	if(active_threads == 0) {
 	  running = false;
 	}
@@ -254,84 +245,204 @@ void *tcp_player_data_pt(void *threadarg) {
   struct tcp_player_ptargs arg;
   arg = *(struct tcp_player_ptargs *) threadarg;
 
+  //FIFO stuff
   struct simple_fifo *fifo;
   long int fifo_loc;
   char *fifo_outbytes;
 
-  int e = 0;
-  int receiving;
-  
-  int rtdbytes;
-  double telapsed;
+  /**************************************/
+  //TCP port stuff
+  int sockfd; // Socket file descriptor
+  int nsockfd; // New Socket file descriptor
+  int optval = 1;
+  int sin_size; // to store struct size
 
-  unsigned count;
+  /* For keeping track of how much gets sent */
+  int imod = 10;
+
+  struct sockaddr_in addr_local;
+  struct sockaddr_in addr_remote;
+  /**************************************/
+
+  //data reading, accounting stuff
+  struct data_packet packet = { .start_str = { 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7 }, 
+				.pack_sz = 0, .pack_numsamps = 0, .pack_totalsamps = 0,
+				.pack_time = 0.0 };
+  long int count = 0, ret = 0;
   long long unsigned int i = 0;
   long long unsigned int frames, wcount;
-
   char *dataz;
+  //  void *hptr; //pointer to header
+
+  printf("Here comes packet start string:\n");
+  for (int j = 0; j < 8; j++) {
+    printf("%x",packet.start_str[j]);
+
+  }
+
+  //time, rtd stuff
+  int rtdbytes;
   struct tm ct;
   struct timeval start, now, then;
+  double telapsed;
 
-  int fd;
+  //output file stuff
+  FILE *ofile;
+  char ostr[1024];
 
-  if (arg.o.debug) { printf("File %s thread init.\n", arg.port); fflush(stdout); }
+  if (arg.o.debug) { printf("Port %u thread init.\n", arg.port); fflush(stdout); }
 
-  if( (fd = open(arg.port, O_RDONLY) ) == -1 ){
-    fprintf(stderr,"Couldn't open %s!!!\n",arg.port);
-    *arg.running = false;
-    arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
-  } 
-
-  dataz = malloc(arg.o.acqsize);
-
+  //rtd setup
   rtdbytes = arg.o.rtdsize*sizeof(short int);
+  gettimeofday(&start, NULL);
+  then = start;
 
+  //fifo setup
   fifo = malloc( sizeof(*fifo) );
   fifo_init(fifo, 4*rtdbytes);  
   fifo_outbytes = malloc(rtdbytes);
 
+  //data setup
+  dataz = malloc(arg.o.revbufsize);
   frames = count = wcount = 0;
-  
+
+  //outfile setup
   gmtime_r(&arg.time, &ct);
-  gettimeofday(&start, NULL);
-  then = start;
+  sprintf(ostr, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u.data", arg.o.outdir, arg.o.prefix,
+	  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec, arg.port);
+  ofile = fopen(ostr, "a");
+  if (ofile == NULL) {
+    fprintf(stderr, "Failed to open output file %s.\n", ostr);
+    arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval);
+  }
    
   //!!!Make sleeptime some sort of command-line arg
   printf("Sleeping %i us.\n", 10000);
   
   /*
-   * Main data loop
+   * Set up port for listening
    */
-  receiving = 1;
-  while ( *arg.running ) {
-    if (arg.o.debug) { printf("Serial file %s debug.\n", arg.port); fflush(stdout); }
 
-    //    usleep(sleeptime);
-      
-    if (arg.o.debug) { printf("Serial file %s read data.\n", arg.port); fflush(stdout); }
-    
-    memset(dataz, 0, arg.o.acqsize);
-    if (receiving) {
-      count = read(fd, dataz, arg.o.acqsize);
-      usleep(100000);
+  /* Get the Socket file descriptor */
+  if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
+    {
+      printf ("ERROR: Failed to obtain Socket Descriptor.\n");
+      return (0);
     }
-    if( count == -1) {
-      fprintf(stderr,"Couldn't read file %s!!\n",arg.port);
+  else printf ("[server] obtain socket descriptor successfully.\n");
+  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+  
+  /* Fill the local socket address struct */
+  addr_local.sin_family = AF_INET; // Protocol Family
+  addr_local.sin_port = htons(arg.port); // Port number
+  addr_local.sin_addr.s_addr = INADDR_ANY; // AutoFill local address
+  bzero(&(addr_local.sin_zero), 8); // Flush the rest of struct
+
+  /* Bind a special Port */
+  if( bind(sockfd, (struct sockaddr*)&addr_local, sizeof(struct sockaddr)) == -1 )
+    {
+      printf ("ERROR: Failed to bind Port %d.\n",arg.port);
       *arg.running = false;
       arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
-    } else if( count == 0){
-      printf("End of file %s reached. Done.\n", arg.port );
-      receiving = 0;
-      *arg.running = false;
-      arg.retval = EXIT_SUCCESS; pthread_exit((void *) &arg.retval);
     }
-    if (count > MIN_BYTES_READ) {
-      wcount += count;
-      if ((i++ % 10) == 0)  {
-	  printf("Read %i bytes of data\n", count);
-	}
+  else printf("[server] bind tcp port %d in addr 0.0.0.0 sucessfully.\n",arg.port);
+
+  /* Listen remote connect/calling */
+  sin_size = sizeof(struct sockaddr_in);  
+  if(listen(sockfd,BACKLOG) == -1)
+    {
+      printf ("ERROR: Failed to listen Port %d.\n", arg.port);
+      *arg.running = false;
+      arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+    }
+  else printf ("[server] listening the port %d sucessfully.\n", arg.port);
+
+  /* Wait for a connection, and obtain a new socket file despriptor for single connection */
+  if ((nsockfd = accept(sockfd, (struct sockaddr *)&addr_remote, &sin_size)) == -1) {
+    printf ("ERROR: obtain new socket descriptor error.\n");
+    *arg.running = false;
+    arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+  }
+  else {
+    printf ("[server] server has got connect from %s.\n", inet_ntoa(addr_remote.sin_addr));
+  }
+  
+  /*
+   * Main data loop
+   */
+  while ( *arg.running ) {
+    if (arg.o.debug) { printf("Port %u debug.\n", arg.port); fflush(stdout); }
+    //    usleep(sleeptime);
+      
+    if (arg.o.debug) { printf("Port %u read data.\n", arg.port); fflush(stdout); }
+    
+    memset(dataz, 0, arg.o.revbufsize);
+
+    /* Read me */
+    count = recv(nsockfd, dataz, arg.o.revbufsize, 0);
+    if(count < 0)
+      {
+	fprintf(stderr,"Couldn't read tcp port %u!!\n",arg.port);
+	*arg.running = false;
+	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
+    else if(count == 0)
+      {
+	printf("[server] connection lost.\n");
+	*arg.running = false;
+	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+      }
+
+    /* for (int chan = 0; chan < n_chan; chan++) { */
+    /*   hptr = memmem(dptr, 2*header.num_read, head_strings[o.endian][chan], 32); // Find channel #chan's header */
+    /*   if (hptr == NULL) { */
+    /* 	printf("Failed to find channel %i's header!\n", chan+1); */
+    /* 	continue; */
+    /*   } */
+
+
+
+
+    ret = fwrite(dataz, sizeof(char), count, ofile);
+    if(ret < count)
+      {
+	printf("File write failed.\n");
+	*arg.running = false;
+	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+      }
+    bzero(dataz, arg.o.revbufsize);
+    wcount += ret;
+    if(i % imod == 0)
+      {
+	printf("Received %li bytes\n", ret);
+      }
+  
     gettimeofday(&then, NULL);
+
+      // Copy into RTD memory if we're running the display
+
+    if (arg.o.dt > 0) {
+      fifo_write(fifo, dataz, count);
+
+      if( fifo_avail(fifo) > 2*rtdbytes ) {
+	if( (fifo_loc = fifo_search(fifo, "aDtromtu hoCllge", 2*rtdbytes) ) != EXIT_FAILURE ) {
+	  fifo_kill(fifo, fifo_loc);
+	  fifo_read(fifo_outbytes, fifo, rtdbytes);
+	  
+	  pthread_mutex_lock(arg.rlock);
+	  if (arg.o.debug)
+	    printf("Port %u rtd moving rtdbytes %i from cfb %p to rtdb %p with %lu avail.\n",
+		   arg.port, rtdbytes, dataz, arg.rtdframe, count);
+	  memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
+	  pthread_mutex_unlock(arg.rlock);
+	}
+	else {
+	  fprintf(stderr,"Search for \"aDtromtu hoCllge\" failed!!\nNo rtd output...\n");
+	}
+      } 
+	  
+    }
+
     //if (arg.port == 1) { printf("r"); fflush(stdout); }
     //        check_acq_seq(dev_handle, arg.port, &fifo_acqseq);
       
@@ -378,34 +489,12 @@ void *tcp_player_data_pt(void *threadarg) {
       // Write header and frame to disk
       //      ret = fwrite(&sync, 1, sizeof(struct frame_sync), ofile);
       //      if (ret != sizeof(struct frame_sync))
-      //	rtd_log("Failed to write sync, file %s: %i.", arg.port, ret);
+      //	rtd_log("Failed to write sync, Port %u: %i.", arg.port, ret);
       //printf("foo"); fflush(stdout);
       //            fflush(ofile);
 	
       //if (arg.port == 1) { printf("w"); fflush(stdout); }
       //	        check_acq_seq(dev_handle, arg.port, &fifo_acqseq);
-
-    if (arg.o.dt > 0) {
-	// Copy into RTD memory if we're running the display
-
-      fifo_write(fifo, dataz, count);
-
-      if( fifo_avail(fifo) > 2*rtdbytes ) {
-      
-	fifo_loc = fifo_search(fifo, "Dartmouth College", 2*rtdbytes);
-	fifo_kill(fifo, fifo_loc);
-	fifo_read(fifo_outbytes, fifo, rtdbytes);
-
-	pthread_mutex_lock(arg.rlock);
-	if (arg.o.debug)
-	  printf("file %s rtd moving rtdbytes %i from cfb %p to rtdb %p with %u avail.\n",
-		 arg.port, rtdbytes, dataz, arg.rtdframe, count);
-	memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
-	pthread_mutex_unlock(arg.rlock);
-    
-      } 
-	  
-    }
 	
     frames++;
     
@@ -419,15 +508,18 @@ void *tcp_player_data_pt(void *threadarg) {
     
   /* Close the file */
   
-  if ( (e = close(fd) ) != 0) {
-    printe("Couldn't close file %i: %li.\n", arg.port, e);
-    arg.retval = e;
+  if ( (arg.retval = fclose(ofile) ) != 0) {
+    printe("Couldn't close file %s!\n", ostr);
   }
     
   telapsed = now.tv_sec-start.tv_sec + 1E-6*(now.tv_usec-start.tv_usec);
     
-  printf("Read %lli bytes from %s in %.4f s: %.4f KBps.\n", wcount, arg.port, telapsed, (wcount/1024.0)/telapsed);
-    
+  printf("Read %lli bytes from port %u in %.4f s: %.4f KBps.\n", wcount, arg.port, telapsed, (wcount/1024.0)/telapsed);
+
+  printf("OK!\n");
+  close(nsockfd);
+  printf("[server] connection to port %u closed.\n", arg.port);
+  
   arg.retval = EXIT_SUCCESS; pthread_exit((void *) &arg.retval);
 }
 

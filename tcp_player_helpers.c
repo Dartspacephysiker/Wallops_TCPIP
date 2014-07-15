@@ -30,8 +30,8 @@ void printe(char *format, ...) {
 
 void init_opt(struct player_opt *o) {
   memset(o, 0, sizeof(struct player_opt));
-  o->acqsize = DEF_ACQSIZE;
-  memset(o->ports, 0, sizeof(char) * MAXPORTS*50); o->ports[0] = "";
+  o->revbufsize = DEF_REVBUFSIZE;
+  o->ports[0] = DEF_PORT;
   o->num_files = 1;
   o->oldsport = false;
   o->prefix = DEF_PREFIX;
@@ -56,23 +56,22 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
   while (-1 != (c = getopt(argc, argv, "A:x:p:o:OP:S:C:R:m:rd:a:XvVh"))) {
     switch (c) {
     case 'A':
-      options->acqsize = strtoul(optarg, NULL, 0);
+      options->revbufsize = strtoul(optarg, NULL, 0);
       break;
     case 'x':
       options->maxacq = strtoul(optarg, NULL, 0);
       break;
     case 'p':
       pn = strtok(optarg, ",");
-      ports[i] = pn;
+      ports[i] = strtoul(pn, NULL, 0);
       while ((pn = strtok(NULL , ",")) != NULL) {
 	i++;
-	ports[i] = pn;
+	ports[i] = strtoul(pn, NULL, 0);
       }
       int j;
       for (j = 0; j <= i; j++) {
 	options->ports[j] = ports[j];
 	options->num_files = i+1;
-	printf("Now we gots %i: %s\n",j,ports[j]);
       }
       break;
     case 'P':
@@ -101,18 +100,19 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
       break;
     case 'h':
     default:
-      printf("tcp_player: \"Play back\" acquired data files for prtd or cprtd.\n\n Options:\n");
-      printf("\t-A <#>\tAcquisition request size [Default: %i].\n", DEF_ACQSIZE);
-      printf("\t-x <#>\tMax <acqsize>-byte acquisitions [Inf].\n");
-      printf("\t-f <#>\tFile(s) to 'acquire' from (see below) [1].\n");
-      printf("\t\tCan either give a single file, or a comma-separated list.\n");
-      printf("\t\ti.e., \"this.data,that.data\", \"/path/to/my.data\"\n");
+      printf("tcp_player: Acquire and optionally setup RTD for TCP/IP data.\n\n Options:\n");
+      printf("\t-A <#>\tReceive buffer size [Default: %u].\n", DEF_REVBUFSIZE);
+      printf("\t-x <#>\tMax <revbufsize>-byte acquisitions [Inf].\n");
+      printf("\t-p <#>\tPort list (see below) [%u].\n", DEF_PORT);
+      printf("\t\tCan either give a single port, or a comma-separated list.\n");
+      printf("\t\ti.e., \"8000\", \"5000,7000\"\n");
       printf("\t-P <s>\tSet output filename prefix [%s].\n", DEF_PREFIX);
       printf("\t-o <s>\tSet output directory [%s].\n", DEF_OUTDIR);
       printf("\n");
       printf("\t-R <#>\tReal-time display output size (in words) [%i].\n", DEF_RTDSIZE);
       printf("\t-m <s>\tReal-time display file [%s].\n", DEF_RTDFILE);
       printf("\t-d <#>\tReal-time display output period [%i].\n", DEF_RTD_DT);
+      printf("\t\t(Output period of \"0\" --> No real-time display.)\n");
       printf("\t-a <#>\tNumber of RTD blocks to average [%i].\n", DEF_RTDAVG);
       printf("\n");
       printf("\t-v Be verbose.\n");

@@ -11,9 +11,10 @@
 #define DEFAULTS_H_
 
 /* Size of data in bytes between frame sync pulses */
-#define DEF_ACQSIZE 131200  // Data acquisition request size for TRANSPARENT mode
+#define DEF_REVBUFSIZE 131200  // Data acquisition request size for TRANSPARENT mode
+#define DEF_PORT 5000
 
-#define DEF_PREFIX "tcp_player"
+#define DEF_PREFIX "tcp_data"
 #define DEF_OUTDIR "/home/spencerh/data/Wallops_TCPdata"
 
 #define DEF_CFSIZE 65536 // Colonel Frame size, words
