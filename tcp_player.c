@@ -305,6 +305,9 @@ void *tcp_player_data_pt(void *threadarg) {
   fifo = malloc( sizeof(*fifo) );
   fifo_init(fifo, 4*rtdbytes);  
   fifo_outbytes = malloc(rtdbytes);
+  //  char skip_str[8] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+  char skip_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
 
   //data setup
   dataz = malloc(arg.o.revbufsize);
@@ -411,6 +414,12 @@ void *tcp_player_data_pt(void *threadarg) {
 
       // Copy into RTD memory if we're running the display
 
+    if(i % imod == 0)
+      {
+	printf("Received %li bytes\n", ret);
+      }
+
+
     if (arg.o.dt > 0) {
 
       fifo_write(fifo, dataz, count);
@@ -419,27 +428,22 @@ void *tcp_player_data_pt(void *threadarg) {
 	packet_hcount = 0;
 
 	if( (fifo_loc = fifo_search(fifo, "aDtromtu hoCllge", 2*rtdbytes) ) != EXIT_FAILURE ) {
-
-	  if(i % imod == 0)
-	    {
-	      printf("Received %li bytes\n", ret);
-	      printf("fifo_avail: %li\n", fifo_avail(fifo));
-	      printf("Found header string!!\n");
-	    }
-
 	  
-	  bool desirable = false;
+	  bool desirable = true;
 	  if(desirable){
 	    //Junk all TCP packet headers
 	    oldskip_loc = fifo_loc;
-	    while( ( skip_loc = fifo_skip("01234567", oldskip_loc, 36, 
+	    while( ( skip_loc = fifo_skip(skip_str, 16, oldskip_loc, 48, 
 					  rtdbytes - (oldskip_loc - fifo_loc), fifo) ) != EXIT_FAILURE ) {
+	      printf("Found footer/header string!!\n");
+
 	      packet_hcount++;
+	      printf("Killed a packet header\n");
 	      oldskip_loc = skip_loc;
 	    }
-	    if( i % imod == 0 ) {
-	      printf("Killed %i packet headers\n", packet_hcount);
-	    }
+	    //	    if( i % imod == 0 ) {
+	    //	      printf("Killed %i packet headers\n", packet_hcount);
+	      //	    }
 	    fifo_loc = oldskip_loc;
 	  }	  
 
