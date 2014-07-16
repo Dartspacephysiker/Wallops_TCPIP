@@ -397,32 +397,36 @@ void *tcp_player_data_pt(void *threadarg) {
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
 
-    ret = fwrite(dataz+40, sizeof(char), count-40, ofile);
+    ret = fwrite(dataz, sizeof(char), count, ofile);
     if(ret < count)
       {
 	printf("File write failed.\n");
 	*arg.running = false;
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
-    bzero(dataz, arg.o.revbufsize);
+    //    bzero(dataz, arg.o.revbufsize);
     wcount += ret;
-    if(i % imod == 0)
-      {
-	printf("Received %li bytes\n", ret);
-      }
   
     gettimeofday(&then, NULL);
 
       // Copy into RTD memory if we're running the display
 
     if (arg.o.dt > 0) {
+
       fifo_write(fifo, dataz, count);
 
-      printf("fifo_avail: %li\n", fifo_avail(fifo));
       if( fifo_avail(fifo) > 2*rtdbytes ) {
 	packet_hcount = 0;
 
 	if( (fifo_loc = fifo_search(fifo, "aDtromtu hoCllge", 2*rtdbytes) ) != EXIT_FAILURE ) {
+
+	  if(i % imod == 0)
+	    {
+	      printf("Received %li bytes\n", ret);
+	      printf("fifo_avail: %li\n", fifo_avail(fifo));
+	      printf("Found header string!!\n");
+	    }
+
 	  
 	  bool desirable = false;
 	  if(desirable){
@@ -440,7 +444,6 @@ void *tcp_player_data_pt(void *threadarg) {
 	  }	  
 
 	  fifo_kill(fifo, fifo_loc);
-
 	  fifo_read(fifo_outbytes, fifo, rtdbytes);
 	  
 	  pthread_mutex_lock(arg.rlock);
