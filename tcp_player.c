@@ -397,7 +397,7 @@ void *tcp_player_data_pt(void *threadarg) {
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
 
-    ret = fwrite(dataz, sizeof(char), count, ofile);
+    ret = fwrite(dataz+40, sizeof(char), count-40, ofile);
     if(ret < count)
       {
 	printf("File write failed.\n");
