@@ -248,7 +248,10 @@ void *tcp_player_data_pt(void *threadarg) {
   //FIFO stuff
   struct simple_fifo *fifo;
   long int fifo_loc;
+  long int skip_loc;
+  long int oldskip_loc;
   char *fifo_outbytes;
+  
 
   /**************************************/
   //TCP port stuff
@@ -259,6 +262,7 @@ void *tcp_player_data_pt(void *threadarg) {
 
   /* For keeping track of how much gets sent */
   int imod = 10;
+  int packet_hcount = 0;
 
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
@@ -393,16 +397,6 @@ void *tcp_player_data_pt(void *threadarg) {
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
 
-    /* for (int chan = 0; chan < n_chan; chan++) { */
-    /*   hptr = memmem(dptr, 2*header.num_read, head_strings[o.endian][chan], 32); // Find channel #chan's header */
-    /*   if (hptr == NULL) { */
-    /* 	printf("Failed to find channel %i's header!\n", chan+1); */
-    /* 	continue; */
-    /*   } */
-
-
-
-
     ret = fwrite(dataz, sizeof(char), count, ofile);
     if(ret < count)
       {
@@ -424,9 +418,29 @@ void *tcp_player_data_pt(void *threadarg) {
     if (arg.o.dt > 0) {
       fifo_write(fifo, dataz, count);
 
+      printf("fifo_avail: %li\n", fifo_avail(fifo));
       if( fifo_avail(fifo) > 2*rtdbytes ) {
+	packet_hcount = 0;
+
 	if( (fifo_loc = fifo_search(fifo, "aDtromtu hoCllge", 2*rtdbytes) ) != EXIT_FAILURE ) {
+	  
+	  bool desirable = false;
+	  if(desirable){
+	    //Junk all TCP packet headers
+	    oldskip_loc = fifo_loc;
+	    while( ( skip_loc = fifo_skip("01234567", oldskip_loc, 36, 
+					  rtdbytes - (oldskip_loc - fifo_loc), fifo) ) != EXIT_FAILURE ) {
+	      packet_hcount++;
+	      oldskip_loc = skip_loc;
+	    }
+	    if( i % imod == 0 ) {
+	      printf("Killed %i packet headers\n", packet_hcount);
+	    }
+	    fifo_loc = oldskip_loc;
+	  }	  
+
 	  fifo_kill(fifo, fifo_loc);
+
 	  fifo_read(fifo_outbytes, fifo, rtdbytes);
 	  
 	  pthread_mutex_lock(arg.rlock);
