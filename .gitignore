@@ -1,0 +1,12 @@
+# Objects
+*.o
+
+# Executables
+tcp_player
+
+# Fake thing
+search_tcpipdata*
+
+#data dir
+Wallops_TCPdata
+
