@@ -1,0 +1,10 @@
+# object files
+*.o
+# link to datadir
+Wallops_TCPdata
+
+# side project garbage
+search_tcpipdata*
+
+# executables
+tcp_player

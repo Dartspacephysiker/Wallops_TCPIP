@@ -1,26 +1,24 @@
 CC = gcc
 
-CFLAGS = -g
-SERVER = server
-CLIENT = client
+CFLAGS = -fPIC -Wall -std=gnu99 -g #-O2
+LDFLAGS = -pipe -Wall -lm -pthread -g #-O2
 
-#SRC = $(SERVER).c $(CLIENT).c
-#OBJ = $(SRC:.c=.o)
+EXEC = tcp_player
 
-all: $(SERVER) $(CLIENT)
+SRC = simple_fifo.c tcp_player.c tcp_player_helpers.c 
+OBJ = $(SRC:.c=.o)
 
-$(SERVER):
-	$(CC) -o $@ $@.c $(CFLAGS)
+HEADERS = simple_fifo.h defaults.h tcp_player_errors.h tcp_player_helpers.h tcp_player_struct.h $(EXEC).h 
 
-$(CLIENT):
-	$(CC) -o $@ $@.c $(CFLAGS)
+all: $(SRC) $(EXEC)
 
+$(EXEC): $(OBJ)
+	$(CC) -o $@ $(OBJ) $(LDFLAGS)
 
-
-#.c.o:
-#	$(CC) -o $@ $(CFLAGS) -c $<
+.c.o: $(HEADERS)
+	$(CC) -o $@ $(CFLAGS) -c $<
 
 .PHONY: clean
 
 clean:
-	rm -f *.o $(SERVER) $(CLIENT)
+	rm -f *.o $(EXEC)
