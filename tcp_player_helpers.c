@@ -7,6 +7,8 @@
  *
  */
 
+#define _GNU_SOURCE
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -137,3 +139,43 @@ int int_cmp(const void *a, const void *b)
 }
 
 
+void *parse_tcp_header(struct tcp_header *header, char *search_bytes, size_t search_length) {
+
+  //  printf("tcp_header is %li bytes large\n", sizeof(struct tcp_header) );
+
+  int header_length = 40;
+
+  char skip_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
+  			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };  
+
+  //  char start_str[8] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+
+  void *check_addr = memmem(search_bytes, search_length, skip_str, 16);
+
+  if( check_addr != NULL ){
+    memcpy(header, check_addr+8, header_length);
+    return check_addr + 8;
+  }
+  /* else { */
+  /*   printf("check_addr is NULL\n"); */
+  /* } */
+
+  //Return location of header, not footer that comes 8 bytes before it--that is, add 8.
+  return check_addr;
+}
+
+int print_tcp_header(struct tcp_header *header){
+
+  printf("TCP header start string =\t\t");
+  for (int i = 0; i < 8; i ++){
+    printf("%x",header->start_str[i]);
+  }
+  printf("\n");
+  printf("Packet size:\t\t%"PRIu32"\n", header->pack_sz);
+  printf("Packet type:\t\t%"PRIu32"\n", header->pack_type);
+  printf("Packet number of samples:\t%"PRIu32"\n", header->pack_numsamps);
+  printf("Total samples sent so far:\t%"PRIu64"\n", header->pack_totalsamps);
+  printf("Packet time:\t\t%f\n", header->pack_time);
+  printf("Sync channel num samples:\t%"PRIu32"\n", header->sync_numsamps);
+  return EXIT_SUCCESS;
+}
