@@ -8,11 +8,12 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
-#define PORT 5000 // The port which is communicate with server
+#define DEF_PORT 5000 //default port num on which to listen
 #define BACKLOG 10
 #define LENGTH 65536 // Buffer length
 int main (int argc, char * argv[])
 {
+  int port; //Where are we listening?
   char revbuf[LENGTH]; // Receive buffer
 
   char *f_name;
@@ -29,17 +30,19 @@ int main (int argc, char * argv[])
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
 
-  if(argc != 2){
-<<<<<<< HEAD:server.c
-    printf("Usage:\t./server <file to send>\n");
-    return(EXIT_SUCCESS);
-=======
-    printf("Usage:\t./server <name for received file>\n");
-    return(EXIT_FAILURE);
->>>>>>> swap_AND_do_lockfile:sample_progs/server.c
+  if(argc == 2){
+    f_name = argv[1];
+    port = DEF_PORT;
+  }
+  else if(argc == 3){
+    f_name = argv[1];
+    port = atoi(argv[2]);
+    printf("Listening on port %i...\n",port);
   }
   else {
-    f_name = argv[argc-1];
+    printf("Usage:\t./server <file to receive> <port num (Default: %i)>\n",
+	   DEF_PORT);
+    return(EXIT_SUCCESS);
   }
 
   FILE *fp = fopen(f_name, "w");
@@ -60,25 +63,25 @@ int main (int argc, char * argv[])
 
   /* Fill the local socket address struct */
   addr_local.sin_family = AF_INET; // Protocol Family
-  addr_local.sin_port = htons(PORT); // Port number
+  addr_local.sin_port = htons(port); // Port number
   addr_local.sin_addr.s_addr = INADDR_ANY; // AutoFill local address
   bzero(&(addr_local.sin_zero), 8); // Flush the rest of struct
 
   /* Bind a special Port */
   if( bind(sockfd, (struct sockaddr*)&addr_local, sizeof(struct sockaddr)) == -1 )
     {
-      printf ("ERROR: Failed to bind Port %d.\n",PORT);
+      printf ("ERROR: Failed to bind Port %d.\n",port);
       return (0);
     }
-  else printf("[server] bind tcp port %d in addr 0.0.0.0 sucessfully.\n",PORT);
+  else printf("[server] bind tcp port %d in addr 0.0.0.0 sucessfully.\n",port);
 
   /* Listen remote connect/calling */
   if(listen(sockfd,BACKLOG) == -1)
     {
-      printf ("ERROR: Failed to listen Port %d.\n", PORT);
+      printf ("ERROR: Failed to listen Port %d.\n", port);
       return (0);
     }
-  else printf ("[server] listening the port %d sucessfully.\n", PORT);
+  else printf ("[server] listening the port %d sucessfully.\n", port);
   int success = 0;
   int f_block_sz = 0;
   while(success == 0)
@@ -118,12 +121,7 @@ int main (int argc, char * argv[])
       printf("Received %lli total bytes", tot_write_sz);
       success = 1;
       close(nsockfd);
-      printf("[server] connection closed.\n");
-<<<<<<< HEAD:server.c
-      return(EXIT_SUCCESS);
-=======
->>>>>>> swap_AND_do_lockfile:sample_progs/server.c
     }
-      fclose(fp);
-      return(0);
+  printf("[server] connection closed.\n");
+  return(EXIT_SUCCESS);
 }
