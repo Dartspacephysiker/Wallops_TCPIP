@@ -16,6 +16,7 @@
 
 #define DEF_PREFIX "tcp_data"
 #define DEF_OUTDIR "/home/spencerh/data/Wallops_TCPdata"
+#define DEF_SLEEPTIME 0
 
 #define DEF_CFSIZE 65536 // Colonel Frame size, words
 // #define DEF_CFHEAD "Dartmouth College "

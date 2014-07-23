@@ -20,10 +20,11 @@ struct player_opt {
   int revbufsize;
   int maxacq;
   unsigned int ports[MAXPORTS];
-  int num_files;
-  bool oldsport;
+  int num_ports;
+  //  bool oldsport;
   char *prefix;
   char *outdir;
+  unsigned int sleeptime;
   
   int rtdsize;
   char *rtdfile;

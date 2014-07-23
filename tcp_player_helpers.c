@@ -34,8 +34,8 @@ void init_opt(struct player_opt *o) {
   memset(o, 0, sizeof(struct player_opt));
   o->revbufsize = DEF_REVBUFSIZE;
   o->ports[0] = DEF_PORT;
-  o->num_files = 1;
-  o->oldsport = false;
+  o->num_ports = 1;
+  //  o->oldsport = false;
   o->prefix = DEF_PREFIX;
   o->outdir = DEF_OUTDIR;
   
@@ -55,7 +55,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
   char *pn;
   int c, i = 0;
   
-  while (-1 != (c = getopt(argc, argv, "A:x:p:o:OP:S:C:R:m:rd:a:XvVh"))) {
+  while (-1 != (c = getopt(argc, argv, "A:x:p:o:OP:s:S:C:R:m:rd:a:XvVh"))) {
     switch (c) {
     case 'A':
       options->revbufsize = strtoul(optarg, NULL, 0);
@@ -73,7 +73,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
       int j;
       for (j = 0; j <= i; j++) {
 	options->ports[j] = ports[j];
-	options->num_files = i+1;
+	options->num_ports = i+1;
       }
       break;
     case 'P':
@@ -82,6 +82,9 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
     case 'o':
       options->outdir = optarg;
       break;      
+    case 's':
+      options->sleeptime = strtoul(optarg, NULL, 0);
+      break;
     case 'R':
       options->rtdsize = strtoul(optarg, NULL, 0);
       break;
@@ -110,6 +113,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
       printf("\t\ti.e., \"8000\", \"5000,7000\"\n");
       printf("\t-P <s>\tSet output filename prefix [%s].\n", DEF_PREFIX);
       printf("\t-o <s>\tSet output directory [%s].\n", DEF_OUTDIR);
+      printf("\t-s <#>\tSet microseconds to sleep between acquisitions [Default: %u]\n", DEF_SLEEPTIME);
       printf("\n");
       printf("\t-R <#>\tReal-time display output size (in words) [%i].\n", DEF_RTDSIZE);
       printf("\t-m <s>\tReal-time display file [%s].\n", DEF_RTDFILE);

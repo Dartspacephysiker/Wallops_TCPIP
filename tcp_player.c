@@ -75,11 +75,13 @@ void tcp_play(struct player_opt o) {
   pg_time = time(NULL);
 
 
-  data_threads = malloc(o.num_files * sizeof(pthread_t));
-  printf("o.num_files is currently %i\n",o.num_files);
-  rtdlocks = malloc(o.num_files * sizeof(pthread_mutex_t));
-  thread_args = malloc(o.num_files * sizeof(struct tcp_player_ptargs));
-  rtdframe = malloc(o.num_files * sizeof(short int *));
+  if( (o.verbose) || (o.debug) ) printf("Number of ports: %i\n",o.num_ports);
+  if(o.sleeptime) printf("Sleeping %u microsec between acquisitions...\n",o.sleeptime);
+
+  data_threads = malloc(o.num_ports * sizeof(pthread_t));
+  rtdlocks = malloc(o.num_ports * sizeof(pthread_mutex_t));
+  thread_args = malloc(o.num_ports * sizeof(struct tcp_player_ptargs));
+  rtdframe = malloc(o.num_ports * sizeof(short int *));
   
   if (o.dt > 0) {
     printf("RTD");
@@ -91,13 +93,13 @@ void tcp_play(struct player_opt o) {
     else printf("/%iavg)", o.rtdavg);
     printf("...");
     
-    rtdout = malloc(o.num_files * rtdsize);
+    rtdout = malloc(o.num_ports * rtdsize);
     
     if ((rtdframe == NULL) || (rtdout == NULL)) {
       printe("RTD mallocs failed.\n");
     }
     
-    for (int i = 0; i < o.num_files; i++) {
+    for (int i = 0; i < o.num_ports; i++) {
       rtdframe[i] = malloc(rtdsize);
     }
     
@@ -114,7 +116,7 @@ void tcp_play(struct player_opt o) {
     if ((fstat(rfd, &sb) == -1) || (!S_ISREG(sb.st_mode))) {
       printe("Improper rtd file.\n"); return;
     }
-    int mapsize = o.num_files*rtdsize + 100;
+    int mapsize = o.num_ports*rtdsize + 100;
     char *zeroes = malloc(mapsize);
     memset(zeroes, 0, mapsize);
     ret = write(rfd, zeroes, mapsize);
@@ -130,10 +132,10 @@ void tcp_play(struct player_opt o) {
     /*
      * Set up basic RTD header
      */
-    header.num_read = o.rtdsize*o.num_files;
+    header.num_read = o.rtdsize*o.num_ports;
     sprintf(header.site_id,"%s","RxDSP Woot?");
     header.hkey = 0xF00FABBA;
-    header.num_channels=o.num_files;
+    header.num_channels=o.num_ports;
     header.channel_flags=0x0F;
     header.num_samples=o.rtdsize;
 //!!! DOES THIS NEED TO BE CHANGED TO 960000?
@@ -146,7 +148,7 @@ void tcp_play(struct player_opt o) {
   /*
    * Set up and create the write thread for each file.
    */
-  for (int i = 0; i < o.num_files; i++) {
+  for (int i = 0; i < o.num_ports; i++) {
     thread_args[i].port = o.ports[i];
     ret = pthread_mutex_init(&rtdlocks[i], NULL);
     if (ret) {
@@ -169,7 +171,7 @@ void tcp_play(struct player_opt o) {
     } else active_threads++;
   }
   
-  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_files: %i.\n", sizeof(header), rtdsize, o.num_files);
+  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_ports: %i.\n", sizeof(header), rtdsize, o.num_ports);
 
 
   /*
@@ -185,7 +187,7 @@ void tcp_play(struct player_opt o) {
 	/*
 	 * Lock every rtd mutex, then just copy in the lock, for speed.
 	 */
-	for (int i = 0; i < o.num_files; i++) {
+	for (int i = 0; i < o.num_ports; i++) {
 	  pthread_mutex_lock(&rtdlocks[i]);
 	  memmove(&rtdout[i*o.rtdsize], rtdframe[i], rtdsize);
 	  pthread_mutex_unlock(&rtdlocks[i]);
@@ -196,7 +198,7 @@ void tcp_play(struct player_opt o) {
 	header.averages = o.rtdavg;
 
 	memmove(rmap, &header, sizeof(struct header_info));
-	memmove(rmap+102, rtdout, rtdsize*o.num_files);
+	memmove(rmap+102, rtdout, rtdsize*o.num_ports);
 
 	then = now;
       }
@@ -206,7 +208,7 @@ void tcp_play(struct player_opt o) {
     /*
      * Check for any threads that are joinable (i.e. that have quit).
      */
-    for (int i = 0; i < o.num_files; i++) {
+    for (int i = 0; i < o.num_ports; i++) {
       ret = pthread_tryjoin_np(data_threads[i], (void *) &tret);
 
       tret = thread_args[i].retval;
@@ -217,7 +219,7 @@ void tcp_play(struct player_opt o) {
 	  running = false;
 	}
       } // if (ret == 0) (thread died)
-    } // for (; i < o.num_files ;)
+    } // for (; i < o.num_ports ;)
     usleep(5000); // Zzzz...
   }
 
@@ -225,7 +227,7 @@ void tcp_play(struct player_opt o) {
    * Free.  FREE!!!
    */
   if (o.dt > 0) {
-    for (int i = 0; i < o.num_files; i++) {
+    for (int i = 0; i < o.num_ports; i++) {
       if (rtdframe[i] != NULL) free(rtdframe[i]);
     }
     free(rtdframe); free(rtdlocks);
@@ -338,6 +340,7 @@ void *tcp_player_data_pt(void *threadarg) {
   }
    
   // I don't think we want to sleep while acquiring TCP/IP data streams at high rates...
+  // But for the purposes of testing on a local machine, I need to simulate delay
   //  printf("Sleeping %i us.\n", 10000);
   
   /*
@@ -400,6 +403,7 @@ void *tcp_player_data_pt(void *threadarg) {
     memset(dataz, 0, arg.o.revbufsize);
 
     /* Read me */
+    if(arg.o.sleeptime) usleep(arg.o.sleeptime);
     count = recv(nsockfd, dataz, arg.o.revbufsize, 0);
     if(count < 0)
       {
