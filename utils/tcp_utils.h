@@ -28,12 +28,19 @@ struct tcp_parser {
 
   long int packetpos; //position within current packet EXCLUDING HEADER AND FOOTER, where "0" is t
   long int bufpos; //position of reading in current buffer of data, where "0" is the beginning of the buffer
-  long int keep;
+  long int bufrem;
+  long int delbytes;
+  long int deltotal;
   long int total;
 
   bool isfile;
   long int filesize;
 
+  char strip_packet;
+  char *strip_fname;
+  FILE *stripfile;
+  bool t_in_this_buff;
+  bool t_in_last_buff;
   //First, check the most obvious case: tail immediately followed by a header
   //If that isn't the case, see if it's a classic header-followed-by-footerheader
   //If it isn't THAT, then something is funky and it's a fringe case.
@@ -82,8 +89,9 @@ struct chan_data {
 bool parse_tcp_header(struct tcp_parser *, char *, size_t, struct tcp_header *);
 int print_tcp_header(struct tcp_header*);
 int print_raw_tcp_header(struct tcp_header*);
+int print_header_memberszinfo(struct tcp_header *);
 int strip_tcp_packet(struct tcp_parser *, char *, size_t, struct tcp_header *);
-int print_header_sizeinfo(struct tcp_header *);
-
+short join_chan_bits(char, char);
+uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 
 #endif /* TCP_UTILS_H_ */
