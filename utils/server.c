@@ -8,6 +8,8 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <unistd.h>
+
 #define DEF_PORT 5000 //default port num on which to listen
 #define BACKLOG 10
 #define LENGTH 65536 // Buffer length

@@ -1,10 +1,13 @@
 /* client.c 
 Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp-on-linux'
  */
+
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <netinet/in.h>

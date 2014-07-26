@@ -1,7 +1,7 @@
 /*
  * tcp_player_helpers.c
  *
- *  Ripped off: Early June (?), 2013
+ *  Ripped off: Early June (?), 2014
  *      Author: wibble
  *       Thief: SMH
  *
@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
 #include <stdarg.h>
 #include <time.h>
 
