@@ -31,6 +31,7 @@ struct tcp_parser {
   long int deltotal;
   long int total;
 
+  bool parse_ok;
   bool do_predict;
 
   bool isfile;
