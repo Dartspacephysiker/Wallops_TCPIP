@@ -11,14 +11,12 @@ struct tcp_parser {
 
   int hc; //tcp header count
   int tc; //tcp footer count
-  int startstr_sz;
   int hdrsz; //size of header
-  int tailsz; //size of footer  
 
-  //variables for looping
-  void *oldheader_addr; 
-  void *header_addr; //Use tail_addr and header_addr if header & footer are separate for some reason
-  void *tail_addr; 
+  char startstr[8];
+  int startstr_sz;
+  char tlstr[8];
+  int tailsz; //size of footer  
 
   //variables for bookkeeping
   long int oldhpos;
@@ -33,34 +31,24 @@ struct tcp_parser {
   long int deltotal;
   long int total;
 
+  bool do_predict;
+
   bool isfile;
   long int filesize;
 
   char strip_packet;
   char *strip_fname;
   FILE *stripfile;
+  long int wcount;
+  int hkill; //num headers killed
+  int tkill; //num footers killed
   bool t_in_this_buff;
   bool t_in_last_buff;
-  //First, check the most obvious case: tail immediately followed by a header
-  //If that isn't the case, see if it's a classic header-followed-by-footerheader
-  //If it isn't THAT, then something is funky and it's a fringe case.
-  //
 
-  //Fringe cases
-  //--->If the tail isn't immediately followed by a header, see what is in between
-  //------>Are we finding a tail followed by a tail? Junk the whole thing, if so--Bad packet.
-  //------>
-  //
-  //--->Is it a header followed by a header? More garbage--Toss that packet. Nothing to salvage
-  //
-  //--->As an aside, look into the tcp protocol. How guaranteed are we to get the header and footer?
-  //--->What we really ought to be doing is just looking for headers, reading the samples that follow,
-  //--->then tossing everything until we find another sweet, sweet header. That's the real thing.
-  //=============================================================================================
-  //                                                                       ======================
-  //Then you can find a program that just pulls out all of the good packets,
-  //and sends the bad packets, bones and all, to anathema maranatha in some error file, if desired.
-  //DO THAT, MY BOY
+  //variables for looping
+  long int *oldheader_addr; 
+  long int *header_addr; //Use tail_addr and header_addr if header & footer are separate for some reason
+  long int *tail_addr; 
 
 };
 
@@ -87,11 +75,15 @@ struct chan_data {
 };
 
 bool parse_tcp_header(struct tcp_parser *, char *, size_t, struct tcp_header *);
-int print_tcp_header(struct tcp_header*);
-int print_raw_tcp_header(struct tcp_header*);
+int print_tcp_header(struct tcp_header *);
+int print_raw_tcp_header(struct tcp_header *);
 int print_header_memberszinfo(struct tcp_header *);
 int strip_tcp_packet(struct tcp_parser *, char *, size_t, struct tcp_header *);
 short join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
+
+struct tcp_header *tcp_header_init(void);
+struct tcp_parser * parser_init(void);
+void free_parser(struct tcp_parser *);
 
 #endif /* TCP_UTILS_H_ */

@@ -49,45 +49,32 @@ int main(int argc, char **argv)
   struct tcp_parser *parser;
   bool parse_ok = false;
   bool careful_strip = true; //ensures things are where they say they are before junking them
+  //  FILE *stripfile;
+  char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
 
+  
   signal(SIGINT, do_depart);
 
   //tcp header stuff
-  tcp_hdr = malloc( sizeof(struct tcp_header) );
-  tcp_hdr->pack_sz =  0;
-  tcp_hdr->pack_type = 0;
-  tcp_hdr->pack_numsamps = 0;
-
-  tcp_hdr->pack_totalsamps = 0;
-  tcp_hdr->pack_time = 0;
-
-  tcp_hdr->sync_numsamps = 0;
+  tcp_hdr = tcp_header_init();
 
   //tcp parser stuff
-  parser = malloc( sizeof(struct tcp_parser) );
+  parser = parser_init();
 
-  parser->hc = 0; //tcp header count
-  parser->tc = 0; //tcp footer count
+  parser->hdrsz = 32 + STARTSTR_SZ; //per DEWESoft NET interface docs
+
+  //copy in start and tail string for use by parse_tcp_header() and strip_tcp_packet()
+  strncpy(parser->startstr,&(tcp_str[8]),STARTSTR_SZ);
   parser->startstr_sz = STARTSTR_SZ;
-  parser->hdrsz = 40;
+  strncpy(parser->tlstr,tcp_str,STARTSTR_SZ); 
   parser->tailsz = STARTSTR_SZ;
 
-  parser->oldheader_addr = NULL;
-  parser->header_addr = NULL;
-  parser->tail_addr = NULL;
-
   parser->oldhpos = -(parser->hdrsz + parser->tailsz); //Needs to be initialized thusly so that 
-  parser->hpos = 0;      //parse_tcp_header doesn't complain that the first header isn't where predicted
-  parser->tpos = 0;
-  //  parser->thdiff = 0; //Keep track of diff between tail and header in case anything wacky happens
-
-  parser->bufpos = 0; //position of reading in current buffer of data
-  parser->delbytes = 0;
-  parser->total = 0;
-  
+                                                       //parse_tcp_header doesn't complain that 
+                                                       //the first header isn't where predicted
+  parser->do_predict = true;
   parser->isfile = true;
-  parser->filesize = fstat.st_size;
-
 
   //Handle command line  
   if(argc == 2) {
@@ -101,6 +88,7 @@ int main(int argc, char **argv)
     filename = strdup(argv[1]);
     bufsz = atoi(argv[2]);
     parser->strip_packet = atoi(argv[3]);
+    parser->strip_fname = malloc(sizeof(char) * 128);
     parser->strip_fname = "stripped_data.txt";
     parser->t_in_last_buff = 0;
     parser->t_in_this_buff = 0;
@@ -121,34 +109,42 @@ int main(int argc, char **argv)
     return(EXIT_FAILURE);
   }
   stat(filename,&fstat);
+  parser->filesize = fstat.st_size;
 
   //Prepare buffers
   buff = malloc(sizeof(char) * bufsz);
   printf("Buffer size:\t%i\n", bufsz);
  
-  hprediction = 0; //At the beginning, we predict that the header will be right at the beginning!
-  num_badp = 0;
-
   //If stripping data, set up stripped file
+
   if(parser->strip_packet == 2){
+    //    printf("doit\n");
+    printf("stripfname: %s\n",parser->strip_fname);
     parser->stripfile = fopen(parser->strip_fname,"w");
+    printf("Stripfile: %p\n",parser->stripfile);
     if (parser->stripfile == NULL) {
-      fprintf(stderr,"Gerrorg. Couldn't open stripfile %s.\n",parser->stripfile);
+      fprintf(stderr,"Gerrorg. Couldn't open stripfile %s.\n",parser->strip_fname);
       return(EXIT_FAILURE);
     }
   }
-
-
-  char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
-			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-
-
+  fwrite(tcp_str,1,16,parser->stripfile);
   //  print_header_memberszinfo(tcp_hdr);
+
+  //Prediction stuff
+  if(parser->do_predict){
+    hprediction = 0; //At the beginning, we predict that the header will be right at the beginning!
+    num_badp = 0;
+    if(parser->strip_packet){
+      hprediction = parser->hdrsz;   
+    }
+  }
 
   //Start looping through file
   printf("Parsing TCP data file %s...\n",filename);
   running = true;
   int i = 0;
+  int count = 0;
+  long int wcount = 0;
   while( ( bufcount = fread(buff, 1, bufsz, datafile) ) > 0 && running ) {
     
     printf("\n***\nBuffer #%i\n***\n",i);
@@ -168,7 +164,7 @@ int main(int argc, char **argv)
 
     while(  parser->bufpos < parser->bufrem ){
       
-      usleep(10000);
+      if(!parser->strip_packet) usleep(10000);
 
       parse_ok = parse_tcp_header(parser, buff, parser->bufrem, tcp_hdr);
 
@@ -179,30 +175,29 @@ int main(int argc, char **argv)
 	if( parser->strip_packet ){
 
 	  //update our prediction accordingly
-	  hprediction -= ( ( parser->t_in_last_buff + parser->t_in_this_buff ) * parser->tailsz + parser->hdrsz);
+	  printf("Subtracting %i from prediction...\n",( ( parser->t_in_last_buff ) * parser->tailsz + parser->hdrsz ));
+	  if(parser->do_predict) hprediction -= ( ( parser->t_in_last_buff ) * parser->tailsz + parser->hdrsz);
 
 	  //do the deed
-	  strip_tcp_packet(parser, buff, bufcount, tcp_hdr);
-
-	  if( parser->strip_packet == 2){//Up the ante
-	    //save dat
-	  }
+	  strip_tcp_packet(parser, buff, parser->bufrem, tcp_hdr);
 	}
 
 	//Current header not where predicted?
-	if( parser->hpos != hprediction ){
-	  num_badp +=1;
-	  printf("***Header position not where predicted by previous packet size!\n");
-	  printf("***Header position relative to beginning of buffer:\t%li\n",parser->hpos);
-	  printf("***Predicted position relative to beginning of buffer:\t%li\n",hprediction);
-	  printf("***Missed by %li bytes... Try again, Hank.\n",hprediction-parser->hpos);
+	if(parser->do_predict) {
+	  if( parser->hpos != hprediction ) {
+	    num_badp +=1;
+	    printf("***Header position not where predicted by previous packet size!\n");
+	    printf("***Header position relative to beginning of buffer:\t%li\n",parser->hpos);
+	    printf("***Predicted position relative to beginning of buffer:\t%li\n",hprediction);
+	    printf("***Missed by %li bytes... Try again, Hank.\n",hprediction-parser->hpos);
+	  }
+	  else {
+	    printf("***Header %i was found where predicted: %li\n",parser->hc,hprediction);
+	    //      tail_addr = (void *)(header_addr + 
+	    parser->tc +=1; //Since the prediction was correct, there must have been a tail
+	  }
 	} 
-	else {
-	  printf("***Header %i was found where predicted: %li\n",parser->hc,hprediction);
-	  //      tail_addr = (void *)(header_addr + 
-	  parser->tc +=1; //Since the prediction was correct, there must have been a tail
-	}
-
+	
 	//new header parsed OK, so its address is qualified to serve as the oldheader address
 	parser->oldheader_addr = parser->header_addr;
 	parser->oldhpos = parser->hpos;
@@ -210,23 +205,35 @@ int main(int argc, char **argv)
       }
       else{
 	printf("header_addr search came up NULL\n");
-	printf("oldhpos is currently %li\n",parser->oldhpos);
+	printf("--->oldhpos is currently %li\n",parser->oldhpos);
 	//Need to adjust oldhpos since its location was relative to an old buffer of data
 	//Specifically, it needs to be a negative number to indicate it was found some number of bytes
 	//BEFORE the current buffer of data
-	parser->oldhpos -= bufcount;
-	printf("oldhpos is NOW %li\n",parser->oldhpos);
+	parser->oldhpos -= parser->bufrem;
+	printf("--->oldhpos is NOW %li\n",parser->oldhpos);
       }
 
       //predicted position of the current header
-      hprediction = parser->oldhpos + tcp_hdr->pack_sz + parser->tailsz + parser->startstr_sz; 
+      if( parser->do_predict) hprediction = parser->oldhpos + tcp_hdr->pack_sz + parser->tailsz + parser->startstr_sz; 
+      
       
     }
-
+    
     parser->total += bufcount;
-    parser->deltotal += parser->delbytes;
     printf("Read %li bytes in total\n",parser->total);
-    printf("Killed %li bytes in total\n",parser->deltotal);
+
+    if(parser->strip_packet){ 
+      parser->deltotal += parser->delbytes;
+      printf("Killed %li bytes in total\n",parser->deltotal);
+      printf("Writing %li bytes to %s\n",parser->bufrem, parser->strip_fname);
+      if( parser->strip_packet == 2){//Up the ante
+	count = fwrite(buff, 1, parser->bufrem, parser->stripfile);
+	printf("count = %i\n",count);
+	if( count == 0){ 
+	  printf("Gerrorg writing to %s\n",parser->stripfile);}
+	wcount += count;
+      }
+    }
 
     if(tcp_hdr->pack_sz < MAX_BUFSZ) {
       bufsz = tcp_hdr->pack_sz;
@@ -245,19 +252,29 @@ int main(int argc, char **argv)
   printf("Total footer count:\t%i\n",parser->tc);
   printf("\n");
   printf("Incorrect header predictions:\t%i\n",num_badp);
+  printf("\n");
+  printf("Total bytes read: %li\n",parser->total);
+  printf("Actual file size: %li\n",parser->filesize);
 
-  //  if(strip_packet){
-    //    printf(
-
-  //  }
+  if( parser->strip_packet ){
+    printf("\n");
+    printf("Total headers killed: %i\n", parser->hkill);
+    printf("Total footers killed: %i\n", parser->tkill);
+    printf("Total bytes stripped: %i\n", parser->deltotal);
+    if( parser->strip_packet == 2 ){
+      //      printf("Wrote %li bytes to file %s", parser->total - parser->deltotal, parser->strip_fname);
+      printf("Wrote %li bytes to file %s", wcount, parser->strip_fname);
+    }
+  }
   printf("\n*************************\n\n");
 
   //Clean up shop
+  if(datafile != NULL) fclose(datafile);
   free(filename);
   free(tcp_hdr);
+  //  free_parser(parser);
   free(parser);
   free(buff);
-  fclose(datafile);
  
   return(EXIT_SUCCESS);
 }
