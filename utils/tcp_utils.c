@@ -18,61 +18,31 @@
 
 #include "tcp_utils.h"
 
-bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, 
-		       size_t bufrem, struct tcp_header *header) {
+bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *header) {
 
   //Look for header beginning at the current buffer position
   p->header_addr = memmem(buf_addr + p->bufpos, p->bufrem - p->bufpos, p->startstr, p->startstr_sz );
 
   if(p->header_addr != NULL) {
 
-    p->hc += 1;
-    p->hpos = (long int)p->header_addr - (long int)buf_addr;
-
     //get new header
     memcpy(header, p->header_addr, p->hdrsz);
-
-
-    //buffer position in front of header, if that doesn't overrun current buffer
-    if( ( p->hpos + p->hdrsz ) < p->bufrem ){
-      
-      p->bufpos = p->hpos + p->hdrsz;
-      printf("tcp_utils::parse_tcp_header: Bufpos is %li\n",p->bufpos);
-      p->packetpos = 0;     //packetpos is defined as zero where the packet header ends
-      p->t_in_this_buff = true;
-    }
-    else { //We're overshooting the buffer, so deal with it. Should be rare.
-      printf("New header will be outside current buffer. Dealing with it...\n");
-      p->bufpos = p->bufrem;
-      p->packetpos = p->bufrem - p->bufpos;
-      if( p->strip_packet ){
-	p->t_in_this_buff = false; //Also expecting the tail to be in next buff
-      }
-    }
-    //If the current packet extends beyond the current buffer of data, 
-    //let user know and appropriately set packetpos for next readthrough
-    if( p->bufrem - p->bufpos < header->pack_sz ){
-      p->packetpos = p->bufrem - p->bufpos;
-      printf("tcp_utils::parse_tcp_header: WARN: Buffer runs out before packet\n");
-      printf("tcp_utils::parse_tcp_hedaer: WARN: Current packet pos:\t%li\n", p->packetpos);
-      
-      if( p->strip_packet ){
-	p->t_in_this_buff = false; //Also expecting the tail to be in next buff
-      }
-    }
-  } //if header_addr is NOT null
-  else { //if header_addr IS null
-
-    if( ( header->pack_sz - p->packetpos ) < ( p->bufrem - p->bufpos ) ) {
-      p->t_in_this_buff = true; //The tail will be in this buffer, children
-    }
+    p->hc += 1;
+    p->parse_ok = true;
     
-    p->bufpos = p->bufrem;
-    return false;
+  }
+  else { 
+    
+    p->parse_ok = false;
+    
+    return EXIT_FAILURE;
+
   }
   
-  return true;
+  return EXIT_SUCCESS;
 }
+
+
 
 int print_tcp_header(struct tcp_header *header){
 
@@ -151,93 +121,268 @@ int print_header_memberszinfo(struct tcp_header *header){
  
 }
 
+int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header){
 
-int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, 
-		       size_t bufrem, struct tcp_header *header) {
+  if(p->parse_ok) { //the bugle horn of a new packet!
+
+    //update position
+    p->hpos = (long int)p->header_addr - (long int)buf_addr;
+    p->bufpos = p->hpos;
+    p->packetpos = - p->startstr_sz;
+
+  }
+
+  return EXIT_SUCCESS;
+
+}
+
+int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *header){
+
+ if(p->parse_ok) {
+
+   //if space between end of buffer and new header is less than the entire new TCP packet
+    if( (p->bufrem - p->hpos ) < ( header->pack_sz + p->tailsz + p->startstr_sz ) ){
+
+      p->t_in_this_buff = false; //expecting the tail to be in next buff
+
+      printf("tcp_utils::prep_for_strip: WARN: Buffer runs out before packet\n");
+      printf("tcp_utils::prep_for_strip: WARN: Current packet pos:\t%li\n", p->packetpos);
+      
+    }
+    else { //The buffer does contain a tail
+
+      p->t_in_this_buff = true;
+
+      printf("tcp_utils:prep_for_strip: Found header, and this buffer contains its corresponding footer.\n");
+      printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos);
+      printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc);
+      printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc);
+      
+    }
+  }  //if header_addr is NOT null
+  else { //if header_addr IS null
+
+    //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
+    if( ( p->bufrem - p->bufpos ) < ( header->pack_sz - p->packetpos + p->tailsz ) ) {
+      
+      p->t_in_this_buff = false;
+
+      printf("tcp_utils:prep_for_strip: Couldn't find header, and this buffer "
+	     "does NOT contain the footer from the last header.\n");
+
+    } 
+
+    else { //what is left in the buffer DOES have a tail in it, if pack_sz isn't lying.
+           //This is an extremely unlikely scenario, you know.
+
+      p->t_in_this_buff = true; //The tail is in this buffer, children
+
+      printf("tcp_utils:prep_for_strip: Couldn't find header, but this buffer "
+	     "contains the footer from the last header.\n");
+      printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos);
+      printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc);
+      printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc);      
+
+    }
+  }
+
+ return EXIT_SUCCESS;
+
+}
+
+int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *header) {
 
   char *tmp_tail_addr;
-  long int tmp_hdr_addr = (long int)p->header_addr;
-  int t_lastbytes = 0;
+  long int tmp_tail_pos;
 
-  //if there is a tail nearby from the last header search, account for it here
-  if( p->t_in_last_buff ) {
+  bool oldt_in_next_buff = false;
 
-    //    printf("tmp tail addr: %p\n",tmp_tail_addr);
-    //    printf("header_addr: %p\n",p->header_addr);
-    if( strncmp( (char *)((long int)p->header_addr - p->tailsz), p->tlstr, p->tailsz) == 0 ){
-      printf("tcp_utils::strip_tcp_packet: found tailstring\n");
-      for(int i = 0; i < p->tailsz; i++){
-	printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]);
-      }
-      printf("\n");
-      
-      t_lastbytes = p->tailsz;
-      p->tkill += p->t_in_last_buff;
-      
-      p->t_in_last_buff = false;
-    }
-    else {
-      printf("tcp_utils::strip_tcp_packet: Heard tell there was a tail here, but no sign...\n");
-      p->t_in_last_buff = true;
-    }
-  }
-  
-  //Start the show by killing the obvious header (as well as the footer from the last buffer, if applicable)
-  if( p->parse_ok ){ //Note, if !parse_ok then header_addr is NULL
-    printf("tcp_utils::strip_tcp_packet: bufrem is %li\n", p->bufrem);
-    //  printf("Moving %li bytes to %p from %p\n",p->bufrem,(void *)((long int)p->header_addr - t_lastbytes),
-    //	 (void *)((long int)p->header_addr + p->hdrsz), p->bufrem - p->bufpos);
-    memmove((void *)((long int)p->header_addr - t_lastbytes),
-	    (void *)((long int)p->header_addr + p->hdrsz), p->bufrem - p->bufpos);
-    
-    //Not keeping bytes corresponding to the header anymore
-    p->delbytes += p->hdrsz + t_lastbytes;
-    p->bufrem -= (p->hdrsz + t_lastbytes);
-    p->hkill += 1;
-    
-    //Better take care of all addresses, or you'll live to regret it
-    //  printf("BEFORE header_addr: %p\n",p->header_addr);
-    p->header_addr -= t_lastbytes/sizeof(*(p->header_addr)); //header_addr is a long int *, so this skips back 8 bytes
-    //  printf("AFTER header_addr: %p\n",p->header_addr);
-
-    //Also all positions
-    p->hpos -= t_lastbytes;
-    p->bufpos -= (p->hdrsz + t_lastbytes); //Move buffer position back, since we killed the header
-  }
   
   if( p->t_in_this_buff ){ //Time to get the tail
    
     //We'll just find it ourselves, since this tool needs to be independent of the program running it
-    tmp_tail_addr = (char *)((long int)buf_addr + p->oldhpos + header->pack_sz + p->startstr_sz);
-    //    p->tail_addr = memmem( (void *)((long int)p->header_addr + header->pack_sz), p->hdrsz, p->tlstr, p->startstr_sz);
+    //    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + p-> startstr_sz + header->pack_sz + 
+    //			     p->tailsz - p->packetpos );
+    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + header->pack_sz - p->packetpos );
+
+    tmp_tail_pos = (long int)tmp_tail_addr - (long int)buf_addr;
+    
+    printf("tcp_utils::strip_tcp_packet: p->t_in_this_buff = true\n");
+    printf("tcp_utils::strip_tcp_packet: p->delbytes = %i\n", p->delbytes); 
+    
+
     p->tail_addr = memmem( tmp_tail_addr, p->hdrsz, p->tlstr, p->tailsz);
     if( p->tail_addr != NULL ){
-      //First, get tail pos relative to current buffer
-      p->tpos = (long int)p->tail_addr - (long int)buf_addr;
-      
-      memmove( p->tail_addr, (void *)((long int)p->tail_addr + p->tailsz), p->bufrem - p->tpos - p->tailsz);
 
-      p->bufrem -= p->tailsz;
+      //First, get tail pos relative to current buffer      
+
+      p->tpos = (long int)p->tail_addr - (long int)buf_addr;
+      printf("tcp_utils::strip_tcp_packet: tmp_tail_pos= %li\n", tmp_tail_pos);
+      printf("tcp_utils::strip_tcp_packet: tail_pos= %li\n", p->tpos);
+      
+
+      //kill it
+      memmove( p->tail_addr, (void *)((long int)p->tail_addr + p->tailsz), p->bufrem - p->tpos - p->tailsz);
+      p->tkill = true;
+
+      //      p->oldt_in_this_buff = false; //It WAS here, but not any more, the filthy animal
 
       //In principle, what is now the tail address should be the location of the next header
       /* if( strncmp( (char *)(p->tail_addr), header->start_str, p->startstr_sz) == 0){ */
       /* 	printf("tcp_utils::strip_tcp_packet: Just killed tail in this buff, and the next header is RIGHT HERE\n"); */
       /* } */
-      p->tkill += 1;
-      p->t_in_last_buff = false; //It WAS here, but not any more, the filthy animal
     }
     else { //Where on earth is the blasted thing?
-      fprintf(stderr,"tcp_utils::strip_tcp_packet: Couldn't find tail!! What is the meaning of life?\n");
-      p->t_in_last_buff = true; //I guess it's in the next buffer--how did this escape us?
+      printf("tcp_utils::strip_tcp_packet: Couldn't find tail!! What is the meaning of life?\n");
+      oldt_in_next_buff = true; //I guess it's in the next buffer--how did this escape us?
     }
 
   }
   else { //See you in the next merry-go-round, tail
-    p->t_in_last_buff = true;
+    oldt_in_next_buff = true;
 
   }
-  
+
+  //Now blast the obvious header (as well as the footer from the last buffer, if applicable)
+  if( p->parse_ok ){ //Note, if !parse_ok then header_addr is NULL
+
+    printf("tcp_utils::strip_tcp_packet: Blasting header...\n");
+    //    printf("tcp_utils::strip_tcp_packet: bufrem is %li\n", p->bufrem);
+
+    //if there is a tail nearby from the last header search, account for it here
+    if( p->oldt_in_this_buff ) {
+
+      //double check, just to be safe
+      if( strncmp( (char *)((long int)p->header_addr - p->tailsz), p->tlstr, p->tailsz) == 0 ){
+
+	p->oldtkill = true;
+      	p->oldt_in_this_buff = false;
+
+	printf("tcp_utils::strip_tcp_packet: found oldtailstring\n");
+	for(int i = 0; i < p->tailsz; i++){
+	  printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]);
+	}
+	printf("\n");
+      
+      }
+      else {
+
+	p->oldt_in_this_buff = true;
+
+	printf("tcp_utils::strip_tcp_packet: Heard tell there was a tail here, but no sign...\n");
+
+      } 
+      
+    }
+
+    printf("Moving %li bytes to %p from %p\n",p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz,
+	   (void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
+	   (void *)((long int)p->header_addr + p->hdrsz), p->bufrem - p->bufpos);
+    //act in a devastating manner here
+    memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
+	    (void *)((long int)p->header_addr + p->hdrsz), 
+	    p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz);
+    
+    p->hkill = true;
+    
+  }
+   
+  p->oldt_in_this_buff = oldt_in_next_buff;
+ 
   return EXIT_SUCCESS;
+}
+
+int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
+
+  //  p->oldhpos -= p->tailsz * (int)p->oldtkill;
+  p->hpos -= ( p->tailsz * ((int)p->oldtkill + (int)p->tkill) + p->hdrsz * p->hkill ); //p->tailsz * (int)p->oldtkill;
+  p->packetpos += (int)p->hkill * (p->hdrsz) + p->tailsz * (int)p->oldtkill;
+  p->bufpos -= ( p->tailsz * ((int)p->oldtkill + (int)p->tkill) + p->hdrsz * p->hkill ); 
+  p->bufrem -= ( (int)p->hkill * (p->hdrsz) + p->tailsz * ((int)p->oldtkill + (int)p->tkill) );
+  p->delbytes += (int)p->hkill * (p->hdrsz) + p->tailsz * ((int)p->oldtkill + (int)p->tkill);
+
+
+  if( p->oldtkill ){
+
+    printf("tcp_utils::post_strip: Killed an old tail\n");
+    printf("BEFORE header_addr: %p\n",p->header_addr);
+    p->header_addr -= p->oldtkill; //header_addr is a long int *, so this skips back 8 bytes
+    printf("AFTER header_addr: %p\n",p->header_addr);
+
+  }
+
+  p->numhkill += (int)p->hkill;
+  p->numtkill += (int)p->oldtkill + (int)p->tkill;
+    
+  p->hkill = false;
+  p-> oldtkill = p->tkill = false;
+
+}
+
+int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
+
+	
+  if( p->parse_ok ){
+
+    printf("tcp_utils:;update_parser_addr_and_pos: p->parse_ok. Updating oldheader.\n");
+    //new header parsed OK, so its address is qualified to serve as the oldheader address
+    p->oldheader_addr = p->header_addr;
+    p->oldhpos = p->hpos;
+    
+    
+    //If the current packet extends beyond the current buffer of data, 
+    //let user know and appropriately set packetpos and bufpos for next readthrough
+    if( (p->bufrem - p->bufpos ) < ( header->pack_sz - p->packetpos + p->tailsz ) ){
+
+      p->packetpos += p->bufrem - p->bufpos;
+      p->bufpos = p->bufrem;
+
+      printf("tcp_utils::update_parser_addr_and_pos: WARN: Buffer runs out before packet\n");
+      printf("tcp_utils::update_parser_addr_and_pos: WARN: Current packet pos:\t%li\n", p->packetpos);
+      
+    }
+    else { //The buffer does contain the beginning of the next packet
+
+      p->packetpos = header->pack_sz;
+      p->bufpos = p->hpos + header->pack_sz;
+
+      if( p->strip_packet ){
+	p->t_in_this_buff = true;
+      }
+      printf("tcp_utils:update_parser_addr_and_pos: Found header, and this buffer contains its corresponding footer.\n");
+      printf("tcp_utils:update_parser_addr_and_pos: Current packet pos:\t%li\n", p->packetpos);
+      printf("tcp_utils:update_parser_addr_and_pos: Current headcount:\t%li\n", p->hc);
+      printf("tcp_utils:update_parser_addr_and_pos: Current tailcount:\t%li\n", p->tc);
+      
+    } 
+  }
+  else { //No header found during this cycle
+        
+    //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
+    //    if( ( p->bufrem - p->bufpos ) <= ( header->pack_sz - p->packetpos + p->tailsz ) ) {
+    
+    if( header->pack_sz - p->packetpos != 0 ){
+      p->packetpos += p->bufrem - p->bufpos;
+    }
+    //    }
+    
+    printf("header_addr search came up NULL\n"); 
+    printf("--->oldhpos is currently %li\n",p->oldhpos);
+    //Need to adjust oldhpos since its location was relative to an old buffer of data
+    //Specifically, it needs to be a negative number to indicate it was found some number of bytes
+    //BEFORE the current buffer of data
+    //	p->
+    //    p->oldhpos -= p->bufrem;
+    printf("--->oldhpos is NOW %li\n",p->oldhpos);
+    
+    //	printf("bufrem is now %li\n",p->bufrem);
+    //	printf("bufpos is now %li\n",p->bufpos);
+    
+    //skip these to end of buff, since we couldn't find a header and there's no way it's here
+    p->bufpos = p->bufrem; //at end of buffer
+    
+    
+  }
 }
 
 //This function assumes that sizeof(short) >= 2 bytes
@@ -255,13 +400,13 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
 
   if(from_network){
     //just in case lower has some garbage bits set above the lowest 6
-    //    lower &= ~(0b0000001111111111);
-    return ( ntohs(upper) << 6) ^ ntohs(lower);
+    //lower &= ~(0b0000001111111111);
+    return ( ntohs(upper) << 10) ^ ntohs(lower);
   } 
   else {
     //just in case lower has some garbage bits set above the lowest 6
     //    lower &= ~(0b1111111111 << 6);
-    return (upper << 6) ^ lower;
+    return (upper << 10) ^ lower;
   }
 }
 
@@ -343,10 +488,13 @@ struct tcp_parser *parser_init(void){
   p->strip_packet = 0;
   p->strip_fname = NULL;
   //p->stripfile = NULL;
-  p->hkill = 0;
-  p->tkill = 0;
+  p->hkill = false;
+  p->oldtkill = false;
+  p->tkill = false;
+  p->numhkill = 0;
+  p->numtkill = 0;
   p->t_in_this_buff = false;
-  p->t_in_last_buff = false;
+  p->oldt_in_this_buff = false;
 
   p->oldheader_addr = NULL;
   p->header_addr = NULL;

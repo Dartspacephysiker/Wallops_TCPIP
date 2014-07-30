@@ -22,7 +22,6 @@ struct tcp_parser {
   long int oldhpos;
   long int hpos; //position of header relative to current buffer startpoint
   long int tpos; //position of tail relative to current buffer startpoint
-  //  long int thdiff;
 
   long int packetpos; //position within current packet EXCLUDING HEADER AND FOOTER, where "0" is t
   long int bufpos; //position of reading in current buffer of data, where "0" is the beginning of the buffer
@@ -40,11 +39,14 @@ struct tcp_parser {
   char strip_packet;
   char *strip_fname;
   FILE *stripfile;
-  long int wcount;
-  int hkill; //num headers killed
-  int tkill; //num footers killed
+  //  long int wcount;
+  bool hkill;
+  bool oldtkill;
+  bool tkill;
+  int numhkill; //num headers killed
+  int numtkill; //num footers killed
   bool t_in_this_buff;
-  bool t_in_last_buff;
+  bool oldt_in_this_buff;
 
   //variables for looping
   long int *oldheader_addr; 
@@ -75,11 +77,16 @@ struct chan_data {
   int64_t timestamps;
 };
 
-bool parse_tcp_header(struct tcp_parser *, char *, size_t, struct tcp_header *);
+bool parse_tcp_header(struct tcp_parser *, char *, struct tcp_header *);
+int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header);
 int print_tcp_header(struct tcp_header *);
 int print_raw_tcp_header(struct tcp_header *);
 int print_header_memberszinfo(struct tcp_header *);
-int strip_tcp_packet(struct tcp_parser *, char *, size_t, struct tcp_header *);
+int prep_for_strip(struct tcp_parser *, char *, struct tcp_header *);
+int strip_tcp_packet(struct tcp_parser *, char *, struct tcp_header *);
+int post_strip(struct tcp_parser *, char *, struct tcp_header *);
+int update_parser_addr_and_pos(struct tcp_parser *, char *, struct tcp_header *);
+
 short join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 
