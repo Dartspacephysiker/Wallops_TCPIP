@@ -34,6 +34,78 @@ struct tcp_header *tcp_header_init(void){
 
 }
 
+struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_singleval){
+
+  //init struct
+  struct dewe_chan *c;
+  c = malloc( sizeof(struct dewe_chan));
+  
+  c->chan_num = chan_num;
+
+  //init data
+  if(is_singleval){
+    c->is_singleval = true;
+    c->dsize = chan_data_size[7]; //double float, 64-bit, as required by DEWESoft
+    c->d.type7 = malloc( sizeof(double_t) );
+  }
+  else {
+    c->dtype = dtype;
+    c->dsize = chan_data_size[dtype];
+
+    //handle various channel types
+    switch ( dtype ) {
+      case 0:
+	c->d.type0 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 1:
+	c->d.type1 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 2:
+	c->d.type2 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 3:
+	c->d.type3 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 4:
+	c->d.type4 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 5:
+	c->d.type5 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 6:
+	c->d.type6 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;
+      case 7:
+	c->d.type7 = malloc( chan_data_size[dtype] * MAXNUMSAMPS );
+	break;	
+    }
+    printf("Channel data type %u: %u bytes per sample\n", dtype, chan_data_size[dtype]);
+    printf("Malloc'ed %i bytes for channel %u...\n", chan_data_size[dtype] * MAXNUMSAMPS, chan_num );
+
+    c->samppos = 0;
+    c->numsamps = 0;
+    c->num_waiting_to_receive = 0;
+    //    chan->samps = malloc( MAXNUMSAMPS * chan->dsize );
+
+    if(is_asynchr){
+      c->is_asynchr = true;
+      c->timestamps = malloc( MAXNUMSAMPS * 8); //Accommodate 64-bit timestamps
+    }
+    else {
+      c->is_asynchr = false;
+      c->timestamps = NULL; 
+    }
+  }
+  //What kind of channel are you?
+  
+  if(is_singleval){
+    c->is_singleval = true;
+  }
+  
+  return c;
+
+}
+
 struct tcp_parser *parser_init(void){
 
   //  p = malloc( sizeof(struct tcp_parser) );
@@ -68,6 +140,8 @@ struct tcp_parser *parser_init(void){
 
   p->parse_ok = false;
 
+  p->do_chans = false;
+
   p->do_predict = false;
   p->hprediction = 0;
   p->num_badp = 0;
@@ -95,7 +169,7 @@ struct tcp_parser *parser_init(void){
 
 }
 
-bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *header) {
+bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *th) {
 
   //Look for header beginning at the current buffer position
   p->header_addr = memmem(buf_addr + p->bufpos, p->bufrem - p->bufpos, p->startstr, p->startstr_sz );
@@ -106,41 +180,41 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *h
     //    memcpy(header, p->header_addr, p->hdrsz); //this doesn't work because of mem alignment
     
     //start string
-    memcpy(&header->start_str, p->header_addr, sizeof(header->start_str));
+    memcpy(&th->start_str, p->header_addr, sizeof(th->start_str));
 
     //packet size
-    memcpy(&header->pack_sz, (void *)((long int)p->header_addr + sizeof(header->start_str)),
-	   sizeof(header->pack_sz));
+    memcpy(&th->pack_sz, (void *)((long int)p->header_addr + sizeof(th->start_str)),
+	   sizeof(th->pack_sz));
 
     //packet type
-    memcpy(&header->pack_type, 
-	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz)), 
-	   sizeof(header->pack_type));
+    memcpy(&th->pack_type, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz)), 
+	   sizeof(th->pack_type));
     
     //packet number of samples
-    memcpy(&header->pack_numsamps, 
-	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
-		    sizeof(header->pack_type)),
-	   sizeof(header->pack_numsamps));
+    memcpy(&th->pack_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type)),
+	   sizeof(th->pack_numsamps));
 
     //total samples
-    memcpy(&header->pack_totalsamps, 
-	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
-		    sizeof(header->pack_type) + sizeof(header->pack_numsamps)),
-	   sizeof(header->pack_totalsamps));
+    memcpy(&th->pack_totalsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps)),
+	   sizeof(th->pack_totalsamps));
 
     //packet time
-    memcpy(&header->pack_time, 
-	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
-		    sizeof(header->pack_type) + sizeof(header->pack_numsamps) + sizeof(header->pack_totalsamps)),
-	   sizeof(header->pack_time));
+    memcpy(&th->pack_time, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps)),
+	   sizeof(th->pack_time));
 
     //sync number of channels
-    memcpy(&header->sync_numsamps, 
-	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
-		    sizeof(header->pack_type) + sizeof(header->pack_numsamps) + sizeof(header->pack_totalsamps) +
-		    sizeof(header->pack_time)),
-	   sizeof(header->sync_numsamps));
+    memcpy(&th->sync_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) +
+		    sizeof(th->pack_time)),
+	   sizeof(th->sync_numsamps));
 
 
     p-> numpackets +=1;
@@ -161,26 +235,26 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *h
 
 
 
-int print_tcp_header(struct tcp_header *header){
+int print_tcp_header(struct tcp_header *th){
 
   printf("TCP header start string =\t\t");
   for (int i = 0; i < STARTSTR_SZ; i ++){
-    printf("%x",header->start_str[i]);
+    printf("%x",th->start_str[i]);
   }
   printf("\n");
-  printf("Packet size:\t\t%"PRIi32"\n", header->pack_sz);
-  printf("Packet type:\t\t%"PRIi32"\n", header->pack_type);
-  printf("Packet number of samples:\t%"PRIi32"\n", header->pack_numsamps);
-  //  printf("Total samples sent so far:\t%"PRIi64"\n", header->pack_totalsamps);
-  printf("Total samples sent so far:\t%.06lli\n", header->pack_totalsamps);
-  printf("Packet time:\t\t%f\n", header->pack_time);
-  //  printf("Packet time in hex:\t%4.4LA\n", header->pack_time);
-  printf("Sync channel num samples:\t%"PRIi32"\n", header->sync_numsamps);
+  printf("Packet size:\t\t%"PRIi32"\n", th->pack_sz);
+  printf("Packet type:\t\t%"PRIi32"\n", th->pack_type);
+  printf("Packet number of samples:\t%"PRIi32"\n", th->pack_numsamps);
+  //  printf("Total samples sent so far:\t%"PRIi64"\n", th->pack_totalsamps);
+  printf("Total samples sent so far:\t%.06lli\n", th->pack_totalsamps);
+  printf("Packet time:\t\t%f\n", th->pack_time);
+  //  printf("Packet time in hex:\t%4.4LA\n", th->pack_time);
+  printf("Sync channel num samples:\t%"PRIi32"\n", th->sync_numsamps);
   return EXIT_SUCCESS;
 }
 
 
-int print_raw_tcp_header(struct tcp_header *header){
+int print_raw_tcp_header(struct tcp_header *th){
 
   int i = 0;
   int j = 0;
@@ -209,7 +283,7 @@ int print_raw_tcp_header(struct tcp_header *header){
     printf("\n");
 
     do {
-      printf("%#hX\t",header->start_str[j] );
+      printf("%#hX\t",th->start_str[j] );
       j++;
       if (j == hdrsz)
 	break;
@@ -223,22 +297,22 @@ int print_raw_tcp_header(struct tcp_header *header){
 }
 
 
-int print_header_memberszinfo(struct tcp_header *header){
+int print_header_memberszinfo(struct tcp_header *th){
 
   printf("\n");
-  printf("sizeof start_str\t%i\n", sizeof(header->start_str));
-  printf("sizeof pack_sz:\t\t%i\n", sizeof(header->pack_sz));
-  printf("sizeof pack_type:\t%i\n", sizeof(header->pack_type));
-  printf("sizeof pack_numsamps:\t%i\n", sizeof(header->pack_numsamps));
-  //  printf("Total samples sent so far:\t%"PRIi64"\n", sizeof(header->pack_totalsamps));
-  printf("sizeof totalsamps:\t%i\n", sizeof(header->pack_totalsamps));
-  printf("sizeof pack_time:\t%i\n", sizeof(header->pack_time));
-  printf("sizeof sync_numsamps:\t%i\n", sizeof(header->sync_numsamps));
+  printf("sizeof start_str\t%i\n", sizeof(th->start_str));
+  printf("sizeof pack_sz:\t\t%i\n", sizeof(th->pack_sz));
+  printf("sizeof pack_type:\t%i\n", sizeof(th->pack_type));
+  printf("sizeof pack_numsamps:\t%i\n", sizeof(th->pack_numsamps));
+  //  printf("Total samples sent so far:\t%"PRIi64"\n", sizeof(th->pack_totalsamps));
+  printf("sizeof totalsamps:\t%i\n", sizeof(th->pack_totalsamps));
+  printf("sizeof pack_time:\t%i\n", sizeof(th->pack_time));
+  printf("sizeof sync_numsamps:\t%i\n", sizeof(th->sync_numsamps));
   return EXIT_SUCCESS;
  
 }
 
-int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header){
+int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *th){
 
   if(p->parse_ok) { //the bugle horn of a new packet!
 
@@ -253,12 +327,12 @@ int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_
 
 }
 
-int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *header){
+int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *th){
 
  if(p->parse_ok) {
 
    //if space between end of buffer and new header is less than the entire new TCP packet
-    if( (p->bufrem - p->hpos ) < ( header->pack_sz + p->tailsz + p->startstr_sz ) ){
+    if( (p->bufrem - p->hpos ) < ( th->pack_sz + p->tailsz + p->startstr_sz ) ){
 
       p->t_in_this_buff = false; //expecting the tail to be in next buff
 
@@ -280,7 +354,7 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *hea
   else { //if header_addr IS null
 
     //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
-    if( ( p->bufrem - p->bufpos ) < ( header->pack_sz - p->packetpos + p->tailsz ) ) {
+    if( ( p->bufrem - p->bufpos ) < ( th->pack_sz - p->packetpos + p->tailsz ) ) {
       
       p->t_in_this_buff = false;
 
@@ -309,7 +383,7 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *hea
 
 }
 
-int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *header) {
+int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th) {
 
   char *tmp_tail_addr;
   long int tmp_tail_pos;
@@ -320,9 +394,9 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
   if( p->t_in_this_buff ){ //Time to get the tail
    
     //We'll just find it ourselves, since this tool needs to be independent of the program running it
-    //    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + p-> startstr_sz + header->pack_sz + 
+    //    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + p-> startstr_sz + th->pack_sz + 
     //			     p->tailsz - p->packetpos );
-    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + header->pack_sz - p->packetpos );
+    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + th->pack_sz - p->packetpos );
 
     tmp_tail_pos = (long int)tmp_tail_addr - (long int)buf_addr;
     
@@ -347,7 +421,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
       //      p->oldt_in_this_buff = false; //It WAS here, but not any more, the filthy animal
 
       //In principle, what is now the tail address should be the location of the next header
-      /* if( strncmp( (char *)(p->tail_addr), header->start_str, p->startstr_sz) == 0){ */
+      /* if( strncmp( (char *)(p->tail_addr), th->start_str, p->startstr_sz) == 0){ */
       /* 	printf("tcp_utils::strip_tcp_packet: Just killed tail in this buff, and the next header is RIGHT HERE\n"); */
       /* } */
     }
@@ -411,7 +485,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
   return EXIT_SUCCESS;
 }
 
-int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
+int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 
   //  p->oldhpos -= p->tailsz * (int)p->oldtkill;
   p->hpos -= ( p->tailsz * ((int)p->oldtkill + (int)p->tkill) + p->hdrsz * p->hkill ); //p->tailsz * (int)p->oldtkill;
@@ -438,7 +512,63 @@ int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
 
 }
 
-int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
+int get_chan_info( struct dewe_chan *c, int numchans ){
+  /* You are right now working on getting info for the next readthrough, and deciding
+whether to make a bunch of variables like "oldnum_waiting_to_receive" and "oldnumsamps" so that
+when the time comes, you can grab all of the relevant samples out of the buffer, run them through
+join_upper10_lower6, and write the new awesome data to file for viewing pleasure.
+
+You might have one function do this combining and writing to file for both old and new, and make "oldsamps" or "newsamps" an argument to the function. 
+
+Another option might be having variables oldsamp_addr, oldnumsamps, oldwaiting_to_receive, and the like--
+whatever is necessary. 
+
+-->Where to put pointer to file? 
+
+*/
+}
+
+int get_chan_samples( struct dewe_chan *c , struct tcp_parser * p , struct tcp_header *th){
+
+  long int chanbufspace; //number of bytes remaining to pick up
+
+  if( p->parse_ok ){ //A fresh batch!
+
+    //    handle_previous_chansamps
+
+    c->samppos = 0;
+    c->numsamps = th->pack_numsamps;
+    chanbufspace = c->numsamps * c->dsize;
+
+    /* if( ( p->bufrem - p->bufpos ) > ) { //if buffer contains all samples for this channel */
+
+    /*   c->num_waiting_to_receive = zero; */
+    /* } */
+  } 
+  else {
+    chanbufspace = ( c->numsamps - c-> samppos ) * c->dsize;
+  }
+
+  //make sure buffer contains all samples for this channel
+
+  //make sure channel buffer is bad enough to hold all samples
+  //c->dsize is number of bytes for given data size
+  if(  chanbufspace > (p->bufrem - p->bufpos) ){
+
+  }
+  else { //there isn't enough space to hold everything!
+
+  }
+
+}
+
+int handle_chan_samples( struct dewe_chan *c , struct tcp_parser * p , struct tcp_header *th){
+
+  
+
+}
+
+int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 
 	
   if( p->parse_ok ){
@@ -451,7 +581,7 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
     
     //If the current packet extends beyond the current buffer of data, 
     //let user know and appropriately set packetpos and bufpos for next readthrough
-    if( (p->bufrem - p->bufpos ) < ( header->pack_sz - p->packetpos + p->tailsz ) ){
+    if( (p->bufrem - p->bufpos ) < ( th->pack_sz - p->packetpos + p->tailsz ) ){
 
       p->packetpos += p->bufrem - p->bufpos;
       p->bufpos = p->bufrem;
@@ -462,8 +592,8 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
     }
     else { //The buffer does contain the beginning of the next packet
 
-      p->packetpos = header->pack_sz;
-      p->bufpos = p->hpos + header->pack_sz;
+      p->packetpos = th->pack_sz;
+      p->bufpos = p->hpos + th->pack_sz;
 
       if( p->strip_packet ){
 	p->t_in_this_buff = true;
@@ -478,9 +608,9 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
   else { //No header found during this cycle
         
     //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
-    //    if( ( p->bufrem - p->bufpos ) <= ( header->pack_sz - p->packetpos + p->tailsz ) ) {
+    //    if( ( p->bufrem - p->bufpos ) <= ( th->pack_sz - p->packetpos + p->tailsz ) ) {
     
-    if( header->pack_sz - p->packetpos != 0 ){
+    if( th->pack_sz - p->packetpos != 0 ){
       p->packetpos += p->bufrem - p->bufpos;
     }
     //    }
@@ -505,7 +635,7 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
 }
 
 //This function assumes that sizeof(short) >= 2 bytes
-short join_chan_bits(char a, char b)
+int16_t join_chan_bits(char a, char b)
 {
   return (a<<8) + b;
 }
@@ -582,6 +712,49 @@ void print_stats(struct tcp_parser *p){
 
 }
 
+void free_chan(struct dewe_chan *c){
+
+  //init data
+  if(c->is_singleval){
+    free( c->d.type7 );
+  }
+  else {
+    //handle various channel types
+    switch ( c->dtype ) {
+      case 0:
+	free( c->d.type0 );
+	break;
+      case 1:
+	free( c->d.type1 );
+	break;
+      case 2:
+	free( c->d.type2 );
+	break;
+      case 3:
+	free( c->d.type3 );
+	break;
+      case 4:
+	free( c->d.type4 );
+	break;
+      case 5:
+	free( c->d.type5 );
+	break;
+      case 6:
+	free( c->d.type6 );
+	break;
+      case 7:
+	free( c->d.type7 );
+	break;	
+    }
+
+    if(c->is_asynchr){
+      free( c->timestamps );
+    }
+  
+    free(c);
+
+  }
+}
 
 void free_parser(struct tcp_parser *p){
 

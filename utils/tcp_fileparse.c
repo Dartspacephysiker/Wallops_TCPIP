@@ -29,11 +29,15 @@
 #define DEBUG 0
 
 #define DEFMAX_BUFSZ 32768
+#define DEF_NUMCHANS 2
 
 bool running;
 
 int main(int argc, char **argv)
 {
+  int numchans;
+  struct dewe_chan *chan[DEF_NUMCHANS];
+
   char *filename;
   FILE *datafile;
   struct stat fstat;
@@ -95,14 +99,23 @@ int main(int argc, char **argv)
     max_bufsz = atoi(argv[2]);
   }
   else if (argc == 4){
-    filename = strdup(argv[1]);
-    max_bufsz = atoi(argv[2]);
-    parser->strip_packet = atoi(argv[3]);
-    parser->strip_fname = malloc(sizeof(char) * 128);
-    parser->strip_fname = "stripped.data";
-    //    sprintf(parser->strip_fname,"stripped-%s",filename);
-    parser->oldt_in_this_buff = 0;
-    parser->t_in_this_buff = 0;
+    if( atoi(argv[3]) <= 2){ //doing strip packet stuff
+	filename = strdup(argv[1]);
+	max_bufsz = atoi(argv[2]);
+	parser->strip_packet = atoi(argv[3]);
+	parser->strip_fname = malloc(sizeof(char) * 128);
+	parser->strip_fname = "stripped.data";
+	//    sprintf(parser->strip_fname,"stripped-%s",filename);
+	parser->oldt_in_this_buff = 0;
+	parser->t_in_this_buff = 0;
+      }
+      else if( atoi(argv[3]) == 3 ){
+	parser->do_chans = true;
+      }
+      else {
+	printf("You fool!!! You expect this program to clean your room as well?\n");
+	return EXIT_FAILURE;
+      }
   }
   else {
     printf("%s <tcp data file> <optional max readbuffer size> <strip_packet (0/1/2)>\n",argv[0]);
@@ -112,6 +125,14 @@ int main(int argc, char **argv)
     printf("If strip_packet = 3, stripped data are saved and RTDed, and bad packets are output to an error file, badpack.data\n");
     return(EXIT_SUCCESS);
   }
+
+  //tcp chan stuff
+  if( parser->do_chans ){
+    for (int i = 0; i < numchans; i ++) {
+      chan[i] = chan_init(i,3,true,false); //channel number, data type 3 (16-bit unsigned int), async, not singleval
+    }
+  }
+
 
   //Open data file
   printf("Opening TCP data file %s\n",filename);
@@ -175,46 +196,65 @@ int main(int argc, char **argv)
       //new header_addr here
       parse_tcp_header(parser, buff, tcp_hdr);
 
+      if( parser->do_chans ){
+	if( parser->parse_ok ){
+	  //use this to find out if we need to make way for a new buffer of channel samples
+	  get_chan_info(chan,numchans);
+	}
+      
+	long int tmp_buf_pos = parser->bufpos;
+	
+	bool moresamps = true;
+	int hasallsamps = 0;
+
+	while( moresamps ){
+	  
+	  for(int j = 0; j < numchans; j++ ){
+	    moresamps = get_chan_samples( chan[i] , parser, tcp_hdr );
+	    if( moresamps ) hasallsamps++;
+	  } 
+	  if( hasallsamps == numchans ){
+	    //
+	  }
+	}
+
+	parser->bufpos = tmp_buf_pos; //set it to what it was before channels messed with it
+
+      } //end do_chans
+
       //new hpos, packetpos, if applicable 
       update_after_parse_header(parser, buff, tcp_hdr);
 
       if( parser->strip_packet ){
-	
-	//determines whether there are footers to kill
-	prep_for_strip(parser, buff, tcp_hdr);
 
-	//do the deed
-	strip_tcp_packet(parser, buff, tcp_hdr);
+	prep_for_strip(parser, buff, tcp_hdr); 	//determines whether there are footers to kill
+	strip_tcp_packet(parser, buff, tcp_hdr); 	//do the deed
 
-	//update our prediction accordingly
-	if(parser->do_predict) {
-	  
+	if( parser->do_predict ) { 	//update our prediction accordingly	  
 	  parser->hprediction -= ( ( (int)parser->oldtkill + (int)parser->tkill) * parser->tailsz +
-	  			   parser->hkill * parser->hdrsz );	  
+				   parser->hkill * parser->hdrsz );	  
 	}	
 
-	//finish the job
-	post_strip(parser, buff, tcp_hdr);
-	
-      }
+	post_strip(parser, buff, tcp_hdr); 	//finish the job	
+      } //end strip_packet
+
+
 
       if( parser->parse_ok ){
-
+	
 	printf("*****Packet #%u*****\n",parser->numpackets);
 	print_tcp_header(tcp_hdr);
 	print_raw_tcp_header(tcp_hdr);
 	
 	//Current header not where predicted?
 	if( parser->do_predict) {
-
+	  
 	  if( parser->hpos != parser->hprediction ) {
-
 	    parser->num_badp +=1;
 	    printf("***Header position not where predicted by previous packet size!\n");
 	    printf("***Header position relative to beginning of buffer:\t%li\n",parser->hpos);
 	    printf("***Predicted position relative to beginning of buffer:\t%li\n",parser->hprediction);
 	    printf("***Missed by %li bytes... Try again, Hank.\n",parser->hprediction-parser->hpos);
-
 	  }
 	  else {
 
@@ -222,16 +262,14 @@ int main(int argc, char **argv)
 	    parser->tc +=1; //Since the prediction was correct, there must have been a tail
 
 	  }
-	  
+
 	  //predicted position of the next header
 	  parser->hprediction = parser->hpos + tcp_hdr->pack_sz + parser->tailsz + parser->startstr_sz;
 
 	} 	
       }	
 
-      //new bufpos, packetpos happens here
-      update_parser_addr_and_pos(parser, buff, tcp_hdr);
-      
+      update_parser_addr_and_pos(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
       
     } //end of current buffer
 
@@ -272,6 +310,12 @@ int main(int argc, char **argv)
   free(filename);
   free(tcp_hdr);
   //  free_parser(parser);
+
+  if( parser->do_chans ){
+    for(int i = 0; i < numchans; i++ ){
+      free_chan( chan[i] );
+    }
+  }
   free(parser);
   free(buff);
  
