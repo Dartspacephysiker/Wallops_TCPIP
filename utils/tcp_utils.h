@@ -4,11 +4,32 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 
 #define STARTSTR_SZ 8
 
+//This assumes only one synchronous channel!
+struct tcp_header {
+  char start_str[STARTSTR_SZ];
+  int pack_sz; //in bytes
+  int pack_type;
+  int pack_numsamps; //number of synchronous samples per channel   //(there should only be one channel)
+  long int pack_totalsamps; //number of samples acquired so far
+  double pack_time; // as given above
+  int sync_numsamps;
+};
+
+struct chan_data {
+  bool chan_is_synchr;
+  bool chan_is_singleval;
+  
+  int32_t numsamps;
+  int64_t timestamps;
+};
+
 struct tcp_parser {
 
+  int numpackets;
   int hc; //tcp header count
   int tc; //tcp footer count
   int hdrsz; //size of header
@@ -31,10 +52,14 @@ struct tcp_parser {
   long int total;
 
   bool parse_ok;
+
   bool do_predict;
+  long int hprediction;
+  unsigned int num_badp;
 
   bool isfile;
   long int filesize;
+  long int wcount;
 
   char strip_packet;
   char *strip_fname;
@@ -43,8 +68,8 @@ struct tcp_parser {
   bool hkill;
   bool oldtkill;
   bool tkill;
-  int numhkill; //num headers killed
-  int numtkill; //num footers killed
+  unsigned int numhkill; //num headers killed
+  unsigned int numtkill; //num footers killed
   bool t_in_this_buff;
   bool oldt_in_this_buff;
 
@@ -53,45 +78,30 @@ struct tcp_parser {
   long int *header_addr; //Use tail_addr and header_addr if header & footer are separate for some reason
   long int *tail_addr; 
 
+  bool verbose;
 };
 
-
-//This assumes only one synchronous channel!
-struct tcp_header {
-  unsigned char start_str[STARTSTR_SZ];
-  int32_t pack_sz; //in bytes
-  int32_t pack_type;
-  int32_t pack_numsamps; //number of synchronous samples per channel 
-                          //(there should only be one channel)
-  int64_t pack_totalsamps; //number of samples acquired so far
-  double pack_time; // as given above
-
-  int32_t sync_numsamps;
-};
-
-struct chan_data {
-  bool chan_is_synchr;
-  bool chan_is_singleval;
-  
-  int32_t numsamps;
-  int64_t timestamps;
-};
-
-bool parse_tcp_header(struct tcp_parser *, char *, struct tcp_header *);
-int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header);
-int print_tcp_header(struct tcp_header *);
-int print_raw_tcp_header(struct tcp_header *);
-int print_header_memberszinfo(struct tcp_header *);
-int prep_for_strip(struct tcp_parser *, char *, struct tcp_header *);
-int strip_tcp_packet(struct tcp_parser *, char *, struct tcp_header *);
-int post_strip(struct tcp_parser *, char *, struct tcp_header *);
-int update_parser_addr_and_pos(struct tcp_parser *, char *, struct tcp_header *);
-
-short join_chan_bits(char, char);
-uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 
 struct tcp_header *tcp_header_init(void);
 struct tcp_parser * parser_init(void);
+
+bool parse_tcp_header(struct tcp_parser *, char *, struct tcp_header *);
+int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header);
+
+int print_tcp_header(struct tcp_header *);
+int print_raw_tcp_header(struct tcp_header *);
+int print_header_memberszinfo(struct tcp_header *);
+
+int prep_for_strip(struct tcp_parser *, char *, struct tcp_header *);
+int strip_tcp_packet(struct tcp_parser *, char *, struct tcp_header *);
+int post_strip(struct tcp_parser *, char *, struct tcp_header *);
+
+int update_parser_addr_and_pos(struct tcp_parser *, char *, struct tcp_header *);
+
+void print_stats(struct tcp_parser *);
 void free_parser(struct tcp_parser *);
+
+short join_chan_bits(char, char);
+uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 
 #endif /* TCP_UTILS_H_ */

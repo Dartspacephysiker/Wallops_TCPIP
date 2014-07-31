@@ -18,6 +18,83 @@
 
 #include "tcp_utils.h"
 
+struct tcp_header *tcp_header_init(void){
+
+  struct tcp_header *t;
+  t = malloc( sizeof(struct tcp_header) );
+
+  t->pack_sz =  0;
+  t->pack_type = 0;
+  t->pack_numsamps = 0;
+
+  t->pack_totalsamps = 0;
+  t->pack_time = 0;
+
+  t->sync_numsamps = 0;
+
+}
+
+struct tcp_parser *parser_init(void){
+
+  //  p = malloc( sizeof(struct tcp_parser) );
+  struct tcp_parser *p;
+  p = malloc( sizeof(struct tcp_parser));
+
+  p->numpackets = 0;
+  p->hc = 0; //tcp header count
+  p->tc = 0; //tcp footer count
+  p->hdrsz = 0;
+
+  for(int i = 0; i < STARTSTR_SZ; i++){
+    p->startstr[i] = '0';
+  }
+  p->startstr_sz = 0;
+
+  for(int i = 0; i < STARTSTR_SZ; i++){
+    p->tlstr[i] = '0';
+  }
+  p->tailsz = 0;
+
+  p->oldhpos = 0; 
+  p->hpos = 0;      
+  p->tpos = 0;
+
+  p->packetpos = 0;
+  p->bufpos = 0;
+  p->bufrem = 0;
+  p->delbytes = 0;
+  p->deltotal = 0;
+  p->total = 0;
+
+  p->parse_ok = false;
+
+  p->do_predict = false;
+  p->hprediction = 0;
+  p->num_badp = 0;
+
+  p->isfile = false;
+  p->filesize = 0;
+  p->wcount = 0;
+
+  p->strip_packet = 0;
+  p->strip_fname = NULL;
+  //p->stripfile = NULL;
+  p->hkill = false;
+  p->oldtkill = false;
+  p->tkill = false;
+  p->numhkill = 0;
+  p->numtkill = 0;
+  p->t_in_this_buff = false;
+  p->oldt_in_this_buff = false;
+
+  p->oldheader_addr = NULL;
+  p->header_addr = NULL;
+  p->tail_addr = NULL;
+
+  p->verbose = false;
+
+}
+
 bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *header) {
 
   //Look for header beginning at the current buffer position
@@ -26,7 +103,47 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *h
   if(p->header_addr != NULL) {
 
     //get new header
-    memcpy(header, p->header_addr, p->hdrsz);
+    //    memcpy(header, p->header_addr, p->hdrsz); //this doesn't work because of mem alignment
+    
+    //start string
+    memcpy(&header->start_str, p->header_addr, sizeof(header->start_str));
+
+    //packet size
+    memcpy(&header->pack_sz, (void *)((long int)p->header_addr + sizeof(header->start_str)),
+	   sizeof(header->pack_sz));
+
+    //packet type
+    memcpy(&header->pack_type, 
+	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz)), 
+	   sizeof(header->pack_type));
+    
+    //packet number of samples
+    memcpy(&header->pack_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
+		    sizeof(header->pack_type)),
+	   sizeof(header->pack_numsamps));
+
+    //total samples
+    memcpy(&header->pack_totalsamps, 
+	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
+		    sizeof(header->pack_type) + sizeof(header->pack_numsamps)),
+	   sizeof(header->pack_totalsamps));
+
+    //packet time
+    memcpy(&header->pack_time, 
+	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
+		    sizeof(header->pack_type) + sizeof(header->pack_numsamps) + sizeof(header->pack_totalsamps)),
+	   sizeof(header->pack_time));
+
+    //sync number of channels
+    memcpy(&header->sync_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(header->start_str) + sizeof(header->pack_sz) + 
+		    sizeof(header->pack_type) + sizeof(header->pack_numsamps) + sizeof(header->pack_totalsamps) +
+		    sizeof(header->pack_time)),
+	   sizeof(header->sync_numsamps));
+
+
+    p-> numpackets +=1;
     p->hc += 1;
     p->parse_ok = true;
     
@@ -55,8 +172,8 @@ int print_tcp_header(struct tcp_header *header){
   printf("Packet type:\t\t%"PRIi32"\n", header->pack_type);
   printf("Packet number of samples:\t%"PRIi32"\n", header->pack_numsamps);
   //  printf("Total samples sent so far:\t%"PRIi64"\n", header->pack_totalsamps);
-  printf("Total samples sent so far:\t%lli\n", header->pack_totalsamps);
-  printf("Packet time:\t\t%4.4LE\n", header->pack_time);
+  printf("Total samples sent so far:\t%.06lli\n", header->pack_totalsamps);
+  printf("Packet time:\t\t%f\n", header->pack_time);
   //  printf("Packet time in hex:\t%4.4LA\n", header->pack_time);
   printf("Sync channel num samples:\t%"PRIi32"\n", header->sync_numsamps);
   return EXIT_SUCCESS;
@@ -78,7 +195,7 @@ int print_raw_tcp_header(struct tcp_header *header){
   for( i = 0; i < ( hdrsz / rowmod); i++){
 
     j = rowmod * i;
-    //    printf("At address %p\n",header + j);
+    //if(p->verbose){ printf("At address %p\n",header + j); }
     
     do {
       printf("%i\t",j);
@@ -145,18 +262,18 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *hea
 
       p->t_in_this_buff = false; //expecting the tail to be in next buff
 
-      printf("tcp_utils::prep_for_strip: WARN: Buffer runs out before packet\n");
-      printf("tcp_utils::prep_for_strip: WARN: Current packet pos:\t%li\n", p->packetpos);
+      if(p->verbose){ printf("tcp_utils::prep_for_strip: WARN: Buffer runs out before packet\n"); }
+      if(p->verbose){ printf("tcp_utils::prep_for_strip: WARN: Current packet pos:\t%li\n", p->packetpos); }
       
     }
     else { //The buffer does contain a tail
 
       p->t_in_this_buff = true;
 
-      printf("tcp_utils:prep_for_strip: Found header, and this buffer contains its corresponding footer.\n");
-      printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos);
-      printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc);
-      printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc);
+      if(p->verbose){ printf("tcp_utils:prep_for_strip: Found header, and this buffer contains its corresponding footer.\n"); }
+      if(p->verbose){ printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos); }
+      if(p->verbose){ printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc); }
+      if(p->verbose){ printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc); }
       
     }
   }  //if header_addr is NOT null
@@ -177,11 +294,13 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *hea
 
       p->t_in_this_buff = true; //The tail is in this buffer, children
 
-      printf("tcp_utils:prep_for_strip: Couldn't find header, but this buffer "
-	     "contains the footer from the last header.\n");
-      printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos);
-      printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc);
-      printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc);      
+      if(p->verbose) {
+	printf("tcp_utils:prep_for_strip: Couldn't find header, but this buffer "
+	       "contains the footer from the last header.\n"); 
+	printf("tcp_utils:prep_for_strip: Current packet pos:\t%li\n", p->packetpos); 
+	printf("tcp_utils:prep_for_strip: Current headcount:\t%li\n", p->hc); 
+	printf("tcp_utils:prep_for_strip: Current tailcount:\t%li\n", p->tc); 
+      }     
 
     }
   }
@@ -207,18 +326,18 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
 
     tmp_tail_pos = (long int)tmp_tail_addr - (long int)buf_addr;
     
-    printf("tcp_utils::strip_tcp_packet: p->t_in_this_buff = true\n");
-    printf("tcp_utils::strip_tcp_packet: p->delbytes = %i\n", p->delbytes); 
+    if(p->verbose){ printf("tcp_utils::strip_tcp_packet: p->t_in_this_buff = true\n"); }
+    if(p->verbose){ printf("tcp_utils::strip_tcp_packet: p->delbytes = %i\n", p->delbytes); }
     
 
-    p->tail_addr = memmem( tmp_tail_addr, p->hdrsz, p->tlstr, p->tailsz);
+    p->tail_addr = memmem( tmp_tail_addr, p->hdrsz + p->startstr_sz + p->tailsz, p->tlstr, p->tailsz);
     if( p->tail_addr != NULL ){
 
       //First, get tail pos relative to current buffer      
 
       p->tpos = (long int)p->tail_addr - (long int)buf_addr;
-      printf("tcp_utils::strip_tcp_packet: tmp_tail_pos= %li\n", tmp_tail_pos);
-      printf("tcp_utils::strip_tcp_packet: tail_pos= %li\n", p->tpos);
+      if(p->verbose){ printf("tcp_utils::strip_tcp_packet: tmp_tail_pos= %li\n", tmp_tail_pos); }
+      if(p->verbose){ printf("tcp_utils::strip_tcp_packet: tail_pos= %li\n", p->tpos); }
       
 
       //kill it
@@ -233,7 +352,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
       /* } */
     }
     else { //Where on earth is the blasted thing?
-      printf("tcp_utils::strip_tcp_packet: Couldn't find tail!! What is the meaning of life?\n");
+      if(p->verbose){ printf("tcp_utils::strip_tcp_packet: Couldn't find tail!! What is the meaning of life?\n"); }
       oldt_in_next_buff = true; //I guess it's in the next buffer--how did this escape us?
     }
 
@@ -246,8 +365,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
   //Now blast the obvious header (as well as the footer from the last buffer, if applicable)
   if( p->parse_ok ){ //Note, if !parse_ok then header_addr is NULL
 
-    printf("tcp_utils::strip_tcp_packet: Blasting header...\n");
-    //    printf("tcp_utils::strip_tcp_packet: bufrem is %li\n", p->bufrem);
+    if(p->verbose){ printf("tcp_utils::strip_tcp_packet: Blasting header...\n"); }
+    //if(p->verbose){     printf("tcp_utils::strip_tcp_packet: bufrem is %li\n", p->bufrem); }
 
     //if there is a tail nearby from the last header search, account for it here
     if( p->oldt_in_this_buff ) {
@@ -258,18 +377,18 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *he
 	p->oldtkill = true;
       	p->oldt_in_this_buff = false;
 
-	printf("tcp_utils::strip_tcp_packet: found oldtailstring\n");
+	if(p->verbose){ printf("tcp_utils::strip_tcp_packet: found oldtailstring\n"); }
 	for(int i = 0; i < p->tailsz; i++){
-	  printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]);
+	  if(p->verbose){ printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]); }
 	}
-	printf("\n");
+	if(p->verbose){ printf("\n"); }
       
       }
       else {
 
 	p->oldt_in_this_buff = true;
 
-	printf("tcp_utils::strip_tcp_packet: Heard tell there was a tail here, but no sign...\n");
+	if(p->verbose){ printf("tcp_utils::strip_tcp_packet: Heard tell there was a tail here, but no sign...\n"); }
 
       } 
       
@@ -304,10 +423,10 @@ int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *header){
 
   if( p->oldtkill ){
 
-    printf("tcp_utils::post_strip: Killed an old tail\n");
-    printf("BEFORE header_addr: %p\n",p->header_addr);
+    if(p->verbose){ printf("tcp_utils::post_strip: Killed an old tail\n"); }
+    if(p->verbose){ printf("BEFORE header_addr: %p\n",p->header_addr); }
     p->header_addr -= p->oldtkill; //header_addr is a long int *, so this skips back 8 bytes
-    printf("AFTER header_addr: %p\n",p->header_addr);
+    if(p->verbose){ printf("AFTER header_addr: %p\n",p->header_addr); }
 
   }
 
@@ -324,7 +443,7 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
 	
   if( p->parse_ok ){
 
-    printf("tcp_utils:;update_parser_addr_and_pos: p->parse_ok. Updating oldheader.\n");
+    if(p->verbose){ printf("tcp_utils:;update_parser_addr_and_pos: p->parse_ok. Updating oldheader.\n"); }
     //new header parsed OK, so its address is qualified to serve as the oldheader address
     p->oldheader_addr = p->header_addr;
     p->oldhpos = p->hpos;
@@ -337,8 +456,8 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
       p->packetpos += p->bufrem - p->bufpos;
       p->bufpos = p->bufrem;
 
-      printf("tcp_utils::update_parser_addr_and_pos: WARN: Buffer runs out before packet\n");
-      printf("tcp_utils::update_parser_addr_and_pos: WARN: Current packet pos:\t%li\n", p->packetpos);
+      if(p->verbose){ printf("tcp_utils::update_parser_addr_and_pos: WARN: Buffer runs out before packet\n"); }
+      if(p->verbose){ printf("tcp_utils::update_parser_addr_and_pos: WARN: Current packet pos:\t%li\n", p->packetpos); }
       
     }
     else { //The buffer does contain the beginning of the next packet
@@ -349,10 +468,10 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
       if( p->strip_packet ){
 	p->t_in_this_buff = true;
       }
-      printf("tcp_utils:update_parser_addr_and_pos: Found header, and this buffer contains its corresponding footer.\n");
-      printf("tcp_utils:update_parser_addr_and_pos: Current packet pos:\t%li\n", p->packetpos);
-      printf("tcp_utils:update_parser_addr_and_pos: Current headcount:\t%li\n", p->hc);
-      printf("tcp_utils:update_parser_addr_and_pos: Current tailcount:\t%li\n", p->tc);
+      if(p->verbose){ printf("tcp_utils:update_parser_addr_and_pos: Found header, and this buffer contains its corresponding footer.\n"); }
+      if(p->verbose){ printf("tcp_utils:update_parser_addr_and_pos: Current packet pos:\t%li\n", p->packetpos); }
+      if(p->verbose){ printf("tcp_utils:update_parser_addr_and_pos: Current headcount:\t%li\n", p->hc); }
+      if(p->verbose){ printf("tcp_utils:update_parser_addr_and_pos: Current tailcount:\t%li\n", p->tc); }
       
     } 
   }
@@ -366,17 +485,17 @@ int update_parser_addr_and_pos(struct tcp_parser *p, char *buf_addr, struct tcp_
     }
     //    }
     
-    printf("header_addr search came up NULL\n"); 
-    printf("--->oldhpos is currently %li\n",p->oldhpos);
+    if(p->verbose){ printf("header_addr search came up NULL\n"); }
+    if(p->verbose){ printf("--->oldhpos is currently %li\n",p->oldhpos); }
     //Need to adjust oldhpos since its location was relative to an old buffer of data
     //Specifically, it needs to be a negative number to indicate it was found some number of bytes
     //BEFORE the current buffer of data
     //	p->
     //    p->oldhpos -= p->bufrem;
-    printf("--->oldhpos is NOW %li\n",p->oldhpos);
+    if(p->verbose){ printf("--->oldhpos is NOW %li\n",p->oldhpos); }
     
-    //	printf("bufrem is now %li\n",p->bufrem);
-    //	printf("bufpos is now %li\n",p->bufpos);
+    //if(p->verbose){ 	printf("bufrem is now %li\n",p->bufrem); }
+    //if(p->verbose){ 	printf("bufpos is now %li\n",p->bufpos); }
     
     //skip these to end of buff, since we couldn't find a header and there's no way it's here
     p->bufpos = p->bufrem; //at end of buffer
@@ -433,74 +552,36 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
   /* printf("return of joinupper10_lower6(c,d,0): 0X%hX\n",join_upper10_lower6(c,d,0)); */
   /* printf("return of joinupper10_lower6(c,d,1): 0X%hX\n",join_upper10_lower6(c,d,1)); */
 
-struct tcp_header *tcp_header_init(void){
+void print_stats(struct tcp_parser *p){
 
-  struct tcp_header *t;
-  t = malloc( sizeof(struct tcp_header) );
+  printf("\n\n**********STATS**********\n\n");
 
-  t->pack_sz =  0;
-  t->pack_type = 0;
-  t->pack_numsamps = 0;
+  printf("Number of packets read:\t%u\n",p->numpackets);
+  printf("Total header count:\t%u\n",p->hc);
+  printf("Total footer count:\t%u\n",p->tc);
+  printf("\n");
+  printf("Incorrect header predictions:\t%u\n",p->num_badp);
+  printf("\n");
+  printf("Total bytes read: %li\n",p->total);
+  printf("Actual file size: %li\n",p->filesize);
 
-  t->pack_totalsamps = 0;
-  t->pack_time = 0;
+  if( p->strip_packet ){
 
-  t->sync_numsamps = 0;
+    printf("\n");
+    printf("Total headers killed: %u\n", p->numhkill);
+    printf("Total footers killed: %u\n", p->numtkill);
+    printf("Total bytes stripped: %u\n", p->deltotal);
+    if( p->strip_packet == 2 ){
+
+      printf("Wrote %li bytes to file %s\n", p->wcount, p->strip_fname);
+
+    }
+  }
+  printf("\n*************************\n\n");
+
 
 }
 
-struct tcp_parser *parser_init(void){
-
-  //  p = malloc( sizeof(struct tcp_parser) );
-  struct tcp_parser *p;
-  p = malloc( sizeof(struct tcp_parser));
-  p->hc = 0; //tcp header count
-  p->tc = 0; //tcp footer count
-  p->hdrsz = 0;
-
-  for(int i = 0; i < STARTSTR_SZ; i++){
-    p->startstr[i] = '0';
-  }
-  p->startstr_sz = 0;
-
-  for(int i = 0; i < STARTSTR_SZ; i++){
-    p->tlstr[i] = '0';
-  }
-  p->tailsz = 0;
-
-  p->oldhpos = 0; 
-  p->hpos = 0;      
-  p->tpos = 0;
-
-  p->packetpos = 0;
-  p->bufpos = 0;
-  p->bufrem = 0;
-  p->delbytes = 0;
-  p->deltotal = 0;
-  p->total = 0;
-
-  p->parse_ok = false;
-  p->do_predict = false;
-
-  p->isfile = false;
-  p->filesize = 0;
-
-  p->strip_packet = 0;
-  p->strip_fname = NULL;
-  //p->stripfile = NULL;
-  p->hkill = false;
-  p->oldtkill = false;
-  p->tkill = false;
-  p->numhkill = 0;
-  p->numtkill = 0;
-  p->t_in_this_buff = false;
-  p->oldt_in_this_buff = false;
-
-  p->oldheader_addr = NULL;
-  p->header_addr = NULL;
-  p->tail_addr = NULL;
-
-}
 
 void free_parser(struct tcp_parser *p){
 
