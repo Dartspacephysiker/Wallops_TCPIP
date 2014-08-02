@@ -18,13 +18,13 @@
 
 #include "tcp_utils.h"
 
-#define DEBUG false
-#define DEF_VERBOSE false
+#define DEBUG true
+#define DEF_VERBOSE true
 
 #define USE_CHAN(chan) c->dtype##chan
 
 /****************/
-/*PRINT ROUTINES*/
+/*INIT ROUTINES*/
 /****************/
 struct tcp_header *tcp_header_init(void){
 
@@ -44,7 +44,7 @@ struct tcp_header *tcp_header_init(void){
 
 struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_singleval){
 
-  printf("tcp_utils.c [chan_init()]: Init channel %i\n",chan_num);
+  printf("tcp_utils.c [chan_init()] Init channel %i\n",chan_num);
   //init struct
   struct dewe_chan *c;
   c = malloc( sizeof(struct dewe_chan));
@@ -58,64 +58,65 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
     c->d.type7 = malloc( sizeof(double_t) );
 
     c->bufsize = chan_data_size[7];
-    c->bufroom = c->bufsize;
+    //    c->bufroom = c->bufsize;
   }
   else {
     c->dtype = dtype;
     c->dsize = chan_data_size[dtype];
 
     c->bufsize = chan_data_size[dtype] * MAXNUMSAMPS;
-    c->bufroom = c->bufsize;
 
-    //handle various channel types
-    switch ( dtype ) {
-      case 0:
-	c->d.type0 = malloc( c->bufsize );
-	//	USE_CHAN( dtype ) = malloc( c->bufsize );
-	break;
-      case 1:
-	c->d.type1 = malloc( c->bufsize );
-	break;
-      case 2:
-	c->d.type2 = malloc( c->bufsize );
-	break;
-      case 3:
-	c->d.type3 = malloc( c->bufsize );
-	break;
-      case 4:
-	c->d.type4 = malloc( c->bufsize );
-	break;
-      case 5:
-	c->d.type5 = malloc( c->bufsize );
-	break;
-      case 6:
-	c->d.type6 = malloc( c->bufsize );
-	break;
-      case 7:
-	c->d.type7 = malloc( c->bufsize );
-	break;	
-    }
+    /* //handle various channel types */
+    /* switch ( dtype ) { */
+    /*   case 0: */
+    /* 	c->d.type0 = malloc( c->bufsize ); */
+    /* 	//	USE_CHAN( dtype ) = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 1: */
+    /* 	c->d.type1 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 2: */
+    /* 	c->d.type2 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 3: */
+    /* 	c->d.type3 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 4: */
+    /* 	c->d.type4 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 5: */
+    /* 	c->d.type5 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 6: */
+    /* 	c->d.type6 = malloc( c->bufsize ); */
+    /* 	break; */
+    /*   case 7: */
+    /* 	c->d.type7 = malloc( c->bufsize ); */
+    /* 	break;	 */
+    /* } */
 
     if ( DEF_VERBOSE ) {
       printf("Channel data type %u: %u bytes per sample\n", dtype, chan_data_size[dtype]);
-      printf("Malloc'ed %i bytes for channel %u buffer...\n", c->bufsize, chan_num );
+      printf("Malloc'ed %i bytes for channel %u buffer...\n", c->bufsize, c->num );
       printf("\n");
     }
 
     
-    c->oldpackaddr = NULL;
+    //    c->oldpackaddr = NULL;
+    c->oldpackaddr = c->d.type3;
     c->oldnum_received = 0;
     c->oldnumsamps = 0;
     c->oldpack_ready = false;
 
-    c->packaddr = NULL;
+    //    c->packaddr = NULL;
+    c->packaddr = c->d.type3;
     c->num_received = 0;
     c->numsamps = 0;
     c->pack_ready = false;
 
     if(is_asynchr){
       c->is_asynchr = true;
-      c->timestamps = malloc( MAXNUMSAMPS * 8); //Accommodate 64-bit timestamps
+      //      c->timestamps = malloc( MAXNUMSAMPS * 8); //Accommodate 64-bit timestamps
     }
     else {
       c->is_asynchr = false;
@@ -133,6 +134,8 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
 }
 
 struct tcp_parser *parser_init(void){
+
+  if( DEBUG ) printf("tcp_utils.c [parser_init()]\n");
 
   //  p = malloc( sizeof(struct tcp_parser) );
   struct tcp_parser *p;
@@ -201,6 +204,8 @@ struct tcp_parser *parser_init(void){
 /*PARSE ROUTINES*/
 /****************/
 bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *th) {
+
+  if( DEBUG ) printf("tcp_utils.c [parse_tcp_header()]\n");
 
   //Look for header beginning at the current buffer position
   p->header_addr = memmem(buf_addr + p->bufpos, p->bufrem - p->bufpos, p->startstr, p->startstr_sz );
@@ -346,6 +351,8 @@ int print_header_memberszinfo(struct tcp_header *th){
 
 int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *th){
 
+  if( DEBUG ) printf("tcp_utils.c [update_after_parse_header()]\n");
+
   //update positions if new packet
   if( p->parse_ok ){
     p->hpos = (long int)p->header_addr - (long int)buf_addr;
@@ -353,6 +360,8 @@ int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_
     p->packetpos = - p->startstr_sz;
   }
 
+  if( DEBUG ) printf("tcp_utils.c [update_after_parse_header()] p->hpos:\t%li\n",p->hpos);
+  if( DEBUG ) printf("tcp_utils.c [update_after_parse_header()] p->packetpos:\t%li\n",p->packetpos);
   return EXIT_SUCCESS;
 
 }
@@ -362,25 +371,27 @@ int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_
 /****************/
 int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *th){
 
- if(p->parse_ok) {
+  if( DEBUG ) printf("tcp_utils.c [prep_for_strip()]\n");
+
+  if(p->parse_ok) {
 
    //if space between end of buffer and new header is less than the entire new TCP packet
     if( (p->bufrem - p->hpos ) < ( th->pack_sz + p->tailsz + p->startstr_sz ) ){
 
       p->t_in_this_buff = false; //expecting the tail to be in next buff
 
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: WARN: Buffer runs out before packet\n"); }
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: WARN: Current packet pos:\t%li\n", p->packetpos); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] WARN: Buffer runs out before packet\n"); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] WARN: Current packet pos:\t%li\n", p->packetpos); }
       
     }
     else { //The buffer does contain a tail
 
       p->t_in_this_buff = true;
 
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: Found header, and this buffer contains its corresponding footer.\n"); }
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: Current packet pos:\t%li\n", p->packetpos); }
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: Current headcount:\t%li\n", p->hc); }
-      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()]: Current tailcount:\t%li\n", p->tc); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] Found header, and this buffer contains its corresponding footer.\n"); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] Current packet pos:\t%li\n", p->packetpos); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] Current headcount:\t%li\n", p->hc); }
+      if(p->verbose){ printf("tcp_utils.c [prep_for_strip()] Current tailcount:\t%li\n", p->tc); }
       
     }
   }  //if header_addr is NOT null
@@ -391,7 +402,7 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *th)
       
       p->t_in_this_buff = false;
 
-      printf("tcp_utils.c [prep_for_strip()]: Couldn't find header, and this buffer "
+      printf("tcp_utils.c [prep_for_strip()] Couldn't find header, and this buffer "
 	     "does NOT contain the footer from the last header.\n");
 
     } 
@@ -402,11 +413,11 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *th)
       p->t_in_this_buff = true; //The tail is in this buffer, children
 
       if(p->verbose) {
-	printf("tcp_utils.c [prep_for_strip()]: Couldn't find header, but this buffer "
+	printf("tcp_utils.c [prep_for_strip()] Couldn't find header, but this buffer "
 	       "contains the footer from the last header.\n"); 
-	printf("tcp_utils.c [prep_for_strip()]: Current packet pos:\t%li\n", p->packetpos); 
-	printf("tcp_utils.c [prep_for_strip()]: Current headcount:\t%li\n", p->hc); 
-	printf("tcp_utils.c [prep_for_strip()]: Current tailcount:\t%li\n", p->tc); 
+	printf("tcp_utils.c [prep_for_strip()] Current packet pos:\t%li\n", p->packetpos); 
+	printf("tcp_utils.c [prep_for_strip()] Current headcount:\t%li\n", p->hc); 
+	printf("tcp_utils.c [prep_for_strip()] Current tailcount:\t%li\n", p->tc); 
       }     
 
     }
@@ -423,6 +434,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
   bool oldt_in_next_buff = false;
 
+  if( DEBUG ) printf("tcp_utils.c [strip_tcp_packet()]\n");
   
   if( p->t_in_this_buff ){ //Time to get the tail
    
@@ -433,8 +445,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
     tmp_tail_pos = (long int)tmp_tail_addr - (long int)buf_addr;
     
-    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: p->t_in_this_buff = true\n"); }
-    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: p->delbytes = %i\n", p->delbytes); }
+    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] p->t_in_this_buff = true\n"); }
+    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] p->delbytes = %i\n", p->delbytes); }
     
 
     p->tail_addr = memmem( tmp_tail_addr, p->hdrsz + p->startstr_sz + p->tailsz, p->tlstr, p->tailsz);
@@ -443,8 +455,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
       //First, get tail pos relative to current buffer      
 
       p->tpos = (long int)p->tail_addr - (long int)buf_addr;
-      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: tmp_tail_pos= %li\n", tmp_tail_pos); }
-      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: tail_pos= %li\n", p->tpos); }
+      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] tmp_tail_pos= %li\n", tmp_tail_pos); }
+      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] tail_pos= %li\n", p->tpos); }
       
 
       //kill it
@@ -455,11 +467,11 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
       //In principle, what is now the tail address should be the location of the next header
       /* if( strncmp( (char *)(p->tail_addr), th->start_str, p->startstr_sz) == 0){ */
-      /* 	printf("tcp_utils.c [strip_tcp_packet()]: Just killed tail in this buff, and the next header is RIGHT HERE\n"); */
+      /* 	printf("tcp_utils.c [strip_tcp_packet()] Just killed tail in this buff, and the next header is RIGHT HERE\n"); */
       /* } */
     }
     else { //Where on earth is the blasted thing?
-      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: Couldn't find tail!! What is the meaning of life?\n"); }
+      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Couldn't find tail!! What is the meaning of life?\n"); }
       oldt_in_next_buff = true; //I guess it's in the next buffer--how did this escape us?
     }
 
@@ -472,8 +484,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
   //Now blast the obvious header (as well as the footer from the last buffer, if applicable)
   if( p->parse_ok ){ //Note, if !parse_ok then header_addr is NULL
 
-    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: Blasting header...\n"); }
-    //if(p->verbose){     printf("tcp_utils.c [strip_tcp_packet()]: bufrem is %li\n", p->bufrem); }
+    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Blasting header...\n"); }
+    //if(p->verbose){     printf("tcp_utils.c [strip_tcp_packet()] bufrem is %li\n", p->bufrem); }
 
     //if there is a tail nearby from the last header search, account for it here
     if( p->oldt_in_this_buff ) {
@@ -484,7 +496,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 	p->oldtkill = true;
       	p->oldt_in_this_buff = false;
 
-	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: found oldtailstring\n"); }
+	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] found oldtailstring\n"); }
 	for(int i = 0; i < p->tailsz; i++){
 	  if(p->verbose){ printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]); }
 	}
@@ -495,7 +507,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
 	p->oldt_in_this_buff = true;
 
-	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()]: Heard tell there was a tail here, but no sign...\n"); }
+	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Heard tell there was a tail here, but no sign...\n"); }
 
       } 
       
@@ -520,6 +532,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
 int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 
+  if( DEBUG ) printf("tcp_utils.c [post_strip()]\n");
+
   //  p->oldhpos -= p->tailsz * (int)p->oldtkill;
   p->hpos -= ( p->tailsz * ((int)p->oldtkill + (int)p->tkill) + p->hdrsz * p->hkill ); //p->tailsz * (int)p->oldtkill;
   p->packetpos += (int)p->hkill * (p->hdrsz) + p->tailsz * (int)p->oldtkill;
@@ -530,7 +544,7 @@ int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 
   if( p->oldtkill ){
 
-    if(p->verbose){ printf("tcp_utils.c [post_strip()]: Killed an old tail\n"); }
+    if(p->verbose){ printf("tcp_utils.c [post_strip()] Killed an old tail\n"); }
     if(p->verbose){ printf("BEFORE header_addr: %p\n",p->header_addr); }
     p->header_addr -= p->oldtkill; //header_addr is a long int *, so this skips back 8 bytes
     if(p->verbose){ printf("AFTER header_addr: %p\n",p->header_addr); }
@@ -547,91 +561,203 @@ int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 /***************/
 /*CHAN ROUTINES*/
 /***************/
-int update_chan_info(struct dewe_chan *c, struct tcp_header *th, struct tcp_parser *p, char *buf_addr ){
-  /* You are right now working on getting info for the next readthrough, and deciding
-whether to make a bunch of variables like "oldnum_not_received" and "oldnumsamps" so that
-when the time comes, you can grab all of the relevant samples out of the buffer, run them through
-join_upper10_lower6, and write the new awesome data to file for viewing pleasure.
-
-You might have one function do this combining and writing to file for both old and new, and make "oldsamps" or "newsamps" an argument to the function. 
-
-Another option might be having variables oldsamp_addr, oldnumsamps, oldnot_received, and the like--
-whatever is necessary. 
-*/
+int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct tcp_parser *p, char *buf_addr ){
 
   //NOTE, THIS WHOLE ROUTINE IS CONTIGENT UPON PARSE_OK
 
-  if( DEBUG ) printf("tcp_utils.c [update_chan_info()]\n");
+  if( DEBUG ) printf("tcp_utils.c [update_chans_post_parse()]\n");
 
   //Swap out old values
   c->oldnumsamps =  c->numsamps;
+  c->oldpackaddr = c->packaddr;
   c->oldnum_received = c->num_received;
-  //  c->oldnum_not_received = c->num_not_received;
+  c->oldpack_ready = c->pack_ready;
 
   //This is a new packet, after all
   c->numsamps = th->sync_numsamps;
+  c->packaddr = c->oldpackaddr + ( c->oldnumsamps * c->dsize );  //packaddr is always oldnumsamps ahead of oldpackaddr
   c->num_received = 0;  
-  //  c->num_not_received = c->numsamps;
+  c->pack_ready = false;
 
+  if( c->is_asynchr ){
+    c->oldtstamps_addr = c->tstamps_addr;
+    c->tstamps_addr = c->oldpackaddr + ( c->oldnumsamps * 8 );
+  }
 
   return EXIT_SUCCESS;
 }
 
-int get_chan_samples( struct dewe_chan *c , struct tcp_parser * p , struct tcp_header *th){
+int get_chan_samples( struct dewe_chan *c , char *buf_addr, struct tcp_parser * p , struct tcp_header *th){
 
-  int maxsampspossible = 0; //if we have to drop some, here's where it'll happen
+  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()]\n");
+
+  bool moresamps;
+  int totdsize;
+
+  if( c->is_asynchr ){
+    totdsize = c->dsize + 8; //accommodate timestamps
+  }
+  else {
+    totdsize = c->dsize;
+  }
 
   if( p->parse_ok ){ //A fresh batch!
 
-    if( c->oldnum_received != c->oldnumsamps ){     //    handle_previous_chansamps
+    if( ( c->oldnumsamps != 0 ) && ( c->oldnum_received != c->oldnumsamps ) ){   //handle_previous_chansamps
+
+      int32_t oldsampsrem = c->oldnumsamps - c->oldnum_received;
 
       //make sure we can get all of the old samples from this buffer
-      if( ( p->bufrem - p->bufpos ) >= ( c->dsize * ( c->oldnumsamps - c->oldnum_received ) ) ){ //we can get em all
+      //these are all behind the new header
+      if( ( p->bufrem - p->bufpos -p->hdrsz ) >= ( totdsize * ( c->oldnumsamps - c->oldnum_received ) ) ){ //we can get em all
+
+	memcpy( (void *)((long int)c->oldpackaddr + (long int)( c->oldnum_received * c->dsize )), 
+		(void *)((long int)buf_addr + p->bufpos ), oldsampsrem * c->dsize ); 
+
+	if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH %i: bufpos before getting old samps: %li\n",
+			   c->num, p->bufpos);
+
+	p->bufpos += oldsampsrem * c->dsize;
+	
+	if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH %i: bufpos after getting old samps: %li\n",
+			   c->num, p->bufpos);
+
+	if( c->is_asynchr ){
+	  memcpy( (void *)((long int)c->oldtstamps_addr + (long int)( c->oldnum_received * 8 )), 
+		  (void *)((long int)buf_addr + p->bufpos ), oldsampsrem * 8 ); 
+	  
+	  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH %i: bufpos before getting old timestamps: %li\n",
+			     c->num, p->bufpos);
+	  
+	  p->bufpos += oldsampsrem * 8;
+	  
+	  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH %i: bufpos after getting old timestamps: %li\n",
+			     c->num, p->bufpos);
+	  
+	}
+	
+	//	p->bufpos += oldsampsrem * totdsize; //BETTER LINE, but use above for debug
+	c->oldnum_received = c->oldnumsamps;
+	c->oldpack_ready = true;
 	
       }
-      else { //we can't get all the old samples from this buffer, so we're going to lose some
+      else { 
+	printf("tcp_utils.c [get_chan_samples()] A logical contradiction. How can you have read a new header,"
+	       " and yet still not have all the previous packet's samples?\n");
       } 
+
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i oldnumsamps\t=\t%i\n",c->num,c->oldnumsamps);
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i oldnumreceived\t=\t%i\n",c->num,c->oldnum_received);
+
+      //skip ahead to new buffer location--doesn't matter if this isn't the last channel
+
     }
-    else { //all old stuff handled; let's move on
+
+    //all right, now we're at bufpos
+    if( p->parse_ok ){  //make sure numsamps matches with what people are telling us
       
-      c->bufroom = c->numsamps * c->dsize; //amount of space available in buffer (all of it)
-      c->num_received = 0; //where we are in the channel buffer (at the beginning, unless) 
+      if( DEBUG ){
+	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to newparse:\t%i\n", c->num, c->numsamps);
+	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to bufpos:\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
+	for( int i = 0; i < 10; i++){
+	  printf("%i\t",i);
+	}
+	printf("\n");
+	for( int i = 0; i < 10; i++){
+	  printf("%#hX\t",(buf_addr+p->bufpos));
+	}
+      }
+      p->bufpos += 4;
+    }
+    
+    //if buff contains all samples for this channel
+    if( ( p->bufrem - p->bufpos - p->hdrsz ) >= c->numsamps * totdsize ) { 
+
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff contains all samples\n", c->num );
+      printf("tcp_utils.c [get_chan_samples()] buf_addr: %p\n", buf_addr );
+      printf("tcp_utils.c [get_chan_samples()] buf_addr + p->bufpos: %p\n", buf_addr + p->bufpos );
+
+      memcpy( c->packaddr, (void *)( (long int)p->header_addr + (long int)p->bufpos ), c->numsamps * c->dsize );
+      if( c->is_asynchr ){
+	memcpy( (void *)((long int)c->tstamps_addr + (long int)c->num_received), 
+		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 ); 
+      }      
       
-      c->numsamps = th->pack_numsamps;
-      
-      if( ( p->bufrem - p->bufpos ) > ) { //if buffer contains all samples for this channel
-	
-	c->num_received = c->numsamps;
-      } //end this buff contains all samps for this chan
-    } //end oldnumrec = oldnumsamps
-  } //end parse_ok
-  else { //parse NOT ok
-    c->bufroom = ( c->numsamps - c-> num_received ) * c->dsize; //we didn't get a new packet, so deal with current packet
+      c->num_received = c->numsamps;
+      c->pack_ready = true;
+      p->bufpos += c->numsamps * totdsize;
+
+      moresamps = true;
+    } //end this buff contains all samps for this chan
+    else {
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff DOESN'T contain all samples\n", c->num );
+
+      memcpy( c->packaddr, (void *)((long int)buf_addr + (long int)p->bufpos ), p->bufrem - p->bufpos );
+      if( c->is_asynchr ){
+	memcpy( (void *)((long int)c->tstamps_addr + (long int)( c->num_received * 8 )), 
+		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 ); 
+      }      
+
+      c->num_received += ( p->bufrem - p->bufpos ) / totdsize;
+      c->pack_ready = false;
+      p->bufpos = p->bufrem; //end of buffer      
+      moresamps = false;
+    }
+  } //end parse_ok  
+  else { 
+
+    int32_t sampsrem = c->numsamps - c->num_received;
+
+    if( ( p->bufrem - p->bufpos ) >= sampsrem * totdsize ) { //buff contains remaining samps
+      memcpy( c->packaddr + ( c->num_received * c->dsize ), 
+	      (void *)((long int)buf_addr + (long int)p->bufpos ), sampsrem * c->dsize );
+      if( c->is_asynchr ){
+	memcpy( (void *)((long int)c->tstamps_addr + (long int)( c->num_received * 8 )), 
+		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 ); 
+      }      
+
+      c->num_received = c->numsamps;
+      c->pack_ready = true;
+      p->bufpos += sampsrem * totdsize;
+      moresamps = true;
+    }
+    else {
+
+      memcpy( c->packaddr + ( c->num_received * c->dsize ), (void *)((long int)buf_addr + p->bufpos ), p->bufrem - p->bufpos );
+
+      c->num_received += ( p->bufrem - p->bufpos ) / c->dsize;
+      c->pack_ready = false;
+      p->bufpos = p->bufrem; //end of buffer
+      moresamps = false;
+    }
   } //end parse NOT OK
 
-  //make sure buffer contains all samples for this channel
+  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numsamps\t=\t%i\n",c->num,c->numsamps);
+  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numreceived\t=\t%i\n",c->num,c->num_received);
+  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] Parser->bufpos\t\t=\t%i\n",c->num,p->bufpos);
+  if( DEBUG  )printf("tcp_utils.c [get_chan_samples()] CH%i--moresamps\t=\t%i\n",c->num,moresamps);
 
-  //make sure channel buffer is bad enough to hold all samples
-  //c->dsize is number of bytes for given data size
-  if(  c->bufroom > (p->bufrem - p->bufpos) ){
-
-  }
-  else { //there isn't enough space to hold everything!
-
-  }
-
-  return maxsampspossible;
-
+  return moresamps;
 }
 
 int write_chan_samples(struct dewe_chan *c, struct tcp_parser *p, struct tcp_header *th){
 
-  if( DEBUG ) printf("tcp_utils.c [write_chan_samples()]: Channel %i\n", c->num );
+  if( DEBUG ) printf("tcp_utils.c [write_chan_samples()] Channel %i\n", c->num );
+
+  //  if
+
 
 }
 
-int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser * p , struct tcp_header *th){
+int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser * p , struct tcp_header *th, FILE *outfile){
 
+  if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()]\n");
+
+  unsigned int *c1_buffstart;
+  unsigned int *c2_buffstart;
+  long int numsamps;
+  size_t dsize;
+  
   if( old == 0 ){
     
     if( c1->numsamps != c2->numsamps ){
@@ -640,29 +766,46 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
       printf("Channel %i:\t%i\n", c2->num, c2->numsamps);
       return EXIT_FAILURE;
     }
+    numsamps = c1->numsamps;
     
-    //relevant addresses are c{1,2}->packaddr
-    //relevant datasizes are c{1,2}->dsize
-    //relevant numsamps is c(1|2)->numsamps
-    //loop it
-    for(int samp = 0; samp < c1->numsamps; samp++){
-      
-    }
+    c1_buffstart = (unsigned int *)c1->packaddr;
+    c2_buffstart = (unsigned int *)c2->packaddr;
   }
   else {
+    
     if( c1->oldnumsamps != c2->oldnumsamps ){
       printf("Unequal number of old samples for each channel!\n");
       printf("(old)Channel %i:\t%i\n", c1->num, c1->oldnumsamps);
       printf("(old)Channel %i:\t%i\n", c2->num, c2->oldnumsamps);
       return EXIT_FAILURE;
     }
-
-    for(int samp = 0; samp < c1->oldnumsamps; samp++){
-      
-    }
+    numsamps = c1->oldnumsamps;
     
-
+    c1_buffstart = (unsigned int *)c1->oldpackaddr;
+    c2_buffstart = (unsigned int *)c2->oldpackaddr;
   }
+  
+  if( c1->dsize != c2->dsize ){
+    printf("Unequal data sizes for each channel!\n");
+    printf("Channel %i datasize:\t%i\n", c1->num, c1->dsize);
+    printf("Channel %i datasize:\t%i\n", c2->num, c2->dsize);
+    return EXIT_FAILURE;
+  }
+  dsize = c1->dsize;
+  
+  if( ( c1_buffstart != NULL ) && ( c2_buffstart != NULL ) ){
+    uint16_t datum;
+    for(int samp = 0; samp < numsamps; samp++){
+      datum = join_upper10_lower6( *(c1_buffstart + samp), *(c2_buffstart + samp), 0);
+      fwrite( &datum, dsize, 1, outfile);
+    }
+  }
+  else {
+    printf("tcp_utils.c [combine_and_write_chandata()] You just tried to slip me a null pointer! You code like a graduate student.\n");
+    return EXIT_FAILURE;
+  }
+
+  if( DEF_VERBOSE ) printf("Combined and wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
 
   return EXIT_SUCCESS;
 }
@@ -685,72 +828,6 @@ int print_chan_info(struct dewe_chan *c){
   printf("\tOldnum received:\t%i\n", c->oldnum_received );
   //  printf("\tOldnum not received:\t%i\n", c->oldnum_not_received );
 
-}
-
-int update_end_of_buff(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
-
-	
-  if( p->parse_ok ){
-
-    if(p->verbose){ printf("tcp_utils:;update_end_of_buff: p->parse_ok. Updating oldheader.\n"); }
-    //new header parsed OK, so its address is qualified to serve as the oldheader address
-    p->oldheader_addr = p->header_addr;
-    p->oldhpos = p->hpos;
-    
-    
-    //If the current packet extends beyond the current buffer of data, 
-    //let user know and appropriately set packetpos and bufpos for next readthrough
-    if( (p->bufrem - p->bufpos ) < ( th->pack_sz - p->packetpos + p->tailsz ) ){
-
-      p->packetpos += p->bufrem - p->bufpos;
-      p->bufpos = p->bufrem;
-
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: WARN: Buffer runs out before packet\n"); }
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: WARN: Current packet pos:\t%li\n", p->packetpos); }
-      
-    }
-    else { //The buffer does contain the beginning of the next packet
-
-      p->packetpos = th->pack_sz;
-      p->bufpos = p->hpos + th->pack_sz;
-
-      if( p->strip_packet ){
-	p->t_in_this_buff = true;
-      }
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: Found header, and this buffer contains its corresponding footer.\n"); }
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: Current packet pos:\t%li\n", p->packetpos); }
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: Current headcount:\t%li\n", p->hc); }
-      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()]: Current tailcount:\t%li\n", p->tc); }
-      
-    } 
-  }
-  else { //No header found during this cycle
-        
-    //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
-    //    if( ( p->bufrem - p->bufpos ) <= ( th->pack_sz - p->packetpos + p->tailsz ) ) {
-    
-    if( th->pack_sz - p->packetpos != 0 ){
-      p->packetpos += p->bufrem - p->bufpos;
-    }
-    //    }
-    
-    if(p->verbose){ printf("header_addr search came up NULL\n"); }
-    if(p->verbose){ printf("--->oldhpos is currently %li\n",p->oldhpos); }
-    //Need to adjust oldhpos since its location was relative to an old buffer of data
-    //Specifically, it needs to be a negative number to indicate it was found some number of bytes
-    //BEFORE the current buffer of data
-    //	p->
-    //    p->oldhpos -= p->bufrem;
-    if(p->verbose){ printf("--->oldhpos is NOW %li\n",p->oldhpos); }
-    
-    //if(p->verbose){ 	printf("bufrem is now %li\n",p->bufrem); }
-    //if(p->verbose){ 	printf("bufpos is now %li\n",p->bufpos); }
-    
-    //skip these to end of buff, since we couldn't find a header and there's no way it's here
-    p->bufpos = p->bufrem; //at end of buffer
-    
-    
-  }
 }
 
 //This function assumes that sizeof(short) >= 2 bytes
@@ -801,6 +878,115 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
   /* printf("return of joinupper10_lower6(c,d,0): 0X%hX\n",join_upper10_lower6(c,d,0)); */
   /* printf("return of joinupper10_lower6(c,d,1): 0X%hX\n",join_upper10_lower6(c,d,1)); */
 
+int clean_chan_buffer(struct dewe_chan *c){
+
+  if( DEBUG ) printf("tcp_utils.c [clean_chan_buffer()] CH%i\n", c->num);
+
+  //well, if the current packet is ready the old one must be too or must have already been handled, so it doesn't
+  //hurt to reset oldpack stuff along the way
+  if( c->oldpack_ready || c->pack_ready ){ 
+
+    if( DEF_VERBOSE ) printf("Cleared old packet data for CH%i...", c->num);
+
+    //now, if the new packet got handled as well
+    if( c->pack_ready ){ //double bonus      
+
+      c->num_received = 0; 
+      c->numsamps = 0;
+      c->pack_ready = false;
+
+      if( DEF_VERBOSE ) printf("AND new packet data!\n");	  
+    }
+    else{ 
+      memmove( c->d.type3, c->packaddr, c->num_received *  c->dsize ); //move new packet data to front of channel buff 
+      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->num_received * 8 ); //also timestamps, if applicable
+      if( DEF_VERBOSE ) printf("but current packet isn't ready!\n");
+      if( DEF_VERBOSE ) printf("\n");  
+    }
+
+    c->oldpackaddr = c->packaddr = c->d.type3; //beginning of buffer for everyone
+    c->oldnum_received = 0;
+    c->oldnumsamps = 0;
+    c->oldpack_ready = false;
+
+    if( c->is_asynchr ){
+      c->oldtstamps_addr = c->tstamps_addr = c->timestamps;
+    }
+
+
+  }
+  /* else if( c->pack_ready ){ //bogus situation */
+  /*   if( DEF_VERBOSE ) printf("tcp_utils.c [clean_chan_buffer()] BOGUS!!\n"); */
+  /* } */
+}
+
+int update_end_of_buff(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
+
+  if( DEBUG ) printf("tcp_utils.c [update_end_of_buff()]\n");
+	
+  if( p->parse_ok ){
+
+    if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] p->parse_ok. Updating oldheader.\n"); }
+    //new header parsed OK, so its address is qualified to serve as the oldheader address
+    p->oldheader_addr = p->header_addr;
+    p->oldhpos = p->hpos;
+    
+    
+    //If the current packet extends beyond the current buffer of data, 
+    //let user know and appropriately set packetpos and bufpos for next readthrough
+    if( (p->bufrem - p->bufpos ) < ( th->pack_sz - p->packetpos + p->tailsz ) ){
+
+      p->packetpos += p->bufrem - p->bufpos;
+      p->bufpos = p->bufrem;
+
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] WARN: Buffer runs out before packet\n"); }
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] WARN: Current packet pos:\t%li\n", p->packetpos); }
+      
+    }
+    else { //The buffer does contain the beginning of the next packet
+
+      p->packetpos = th->pack_sz;
+      p->bufpos = p->hpos + th->pack_sz;
+
+      if( p->strip_packet ){
+	p->t_in_this_buff = true;
+      }
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] Found header, and this buffer contains its corresponding footer.\n"); }
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] Current packet pos:\t%li\n", p->packetpos); }
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] Current headcount:\t%li\n", p->hc); }
+      if(p->verbose){ printf("tcp_utils.c [update_end_of_buff()] Current tailcount:\t%li\n", p->tc); }
+      
+    } 
+  }
+  else { //No header found during this cycle
+        
+    //if the total left to read in the buffer is less than the total left to read in the packet (+ tail)
+    //    if( ( p->bufrem - p->bufpos ) <= ( th->pack_sz - p->packetpos + p->tailsz ) ) {
+    
+    if( th->pack_sz - p->packetpos != 0 ){
+      p->packetpos += p->bufrem - p->bufpos;
+    }
+    //    }
+    
+    if(p->verbose){ printf("header_addr search came up NULL\n"); }
+    if(p->verbose){ printf("--->oldhpos is currently %li\n",p->oldhpos); }
+    //Need to adjust oldhpos since its location was relative to an old buffer of data
+    //Specifically, it needs to be a negative number to indicate it was found some number of bytes
+    //BEFORE the current buffer of data
+    //	p->
+    //    p->oldhpos -= p->bufrem;
+    if(p->verbose){ printf("--->oldhpos is NOW %li\n",p->oldhpos); }
+    
+    //if(p->verbose){ 	printf("bufrem is now %li\n",p->bufrem); }
+    //if(p->verbose){ 	printf("bufpos is now %li\n",p->bufpos); }
+    
+    //skip these to end of buff, since we couldn't find a header and there's no way it's here
+    p->bufpos = p->bufrem; //at end of buffer
+    
+    
+  }
+}
+
 /**************/
 /*FINISHER ROUTINES*/
 /**************/
@@ -843,7 +1029,7 @@ void print_stats(struct tcp_parser *p){
 
 /* void print_chan_stats(struct dewe_chan **c_arr, struct tcp_parser *p){ */
 
-/*   printf("\n******CHAN %i STATS******\n\n"); */
+/*   printf("\n******CH%i STATS******\n\n"); */
 
 /*   if( p->do_chans == 3){ */
 /*     printf("Num packets combined:\t%i\n",p->packs_combined); */

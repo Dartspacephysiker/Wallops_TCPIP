@@ -27,7 +27,7 @@
 #include "tcp_fileparse.h"
 
 #define DEBUG 0
-#define DEF_VERBOSE false
+#define DEF_VERBOSE true
 
 #define DEFMAX_BUFSZ 32768
 
@@ -58,6 +58,8 @@ int main(int argc, char **argv)
 
   int numchans;
   struct dewe_chan *chan[MAX_NUMCHANS];
+  char *chanbuff[MAX_NUMCHANS];
+  char *chantimestamps[MAX_NUMCHANS];
   char combfname[] = "combined_chans.data";
   FILE *combfile; //File for combining upper 10, lower 6 bits of two different channels
                   //to accommodate the strange 10-bit TM data at Wallops
@@ -73,15 +75,15 @@ int main(int argc, char **argv)
   parser->hdrsz = 32 + STARTSTR_SZ; //per DEWESoft NET interface docs
 
   //copy in start and tail string for use by parse_tcp_header() and strip_tcp_packet()
-  if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()]: Start string:\n");
+  if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()] Start string:\t");
   for (int i = 0; i < STARTSTR_SZ; i ++){
     strncpy(&(parser->startstr[i]),&(tcp_str[8+i]),1);
     if ( DEF_VERBOSE ) printf("%x",parser->startstr[i]);
   }
-  //  printf("\n");
+  if( DEF_VERBOSE ) printf("\n");
   parser->startstr_sz = STARTSTR_SZ;
 
-  if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()]: Tail string:\n");
+  if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()] Tail string:\t");
   strncpy(parser->tlstr,tcp_str,STARTSTR_SZ); 
   if (DEF_VERBOSE ){
     for (int i = 0; i < STARTSTR_SZ; i ++){
@@ -130,6 +132,7 @@ int main(int argc, char **argv)
       else {
 	parser->nchans = DEF_NUMCHANS;
       }
+      if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()] parser->nchans\t=\t%i\n",parser->nchans);
     }
     else {
       printf("You fool!!! You expect this program to clean your room as well?\n");
@@ -185,6 +188,18 @@ int main(int argc, char **argv)
 	}
       }
     }
+    //chan buffs
+    for(int i = 0; i < parser->nchans; i++){
+      chanbuff[i] = malloc( chan[i]->bufsize );
+      chan[i]->d.type3 = chanbuff[i];
+      chan[i]->packaddr = chan[i]->d.type3;
+      chan[i]->oldpackaddr = chan[i]->d.type3;
+      if( chan[i]->is_asynchr ){
+	chantimestamps[i] = malloc( MAXNUMSAMPS * 8);
+	chan[i]->timestamps = chantimestamps[i];
+	if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()] Malloc'ed %i bytes for channel %u timestamps buffer...\n", MAXNUMSAMPS * 8, chan[i]->num );
+      }
+    }
     if( parser->do_chans == 3){ //doing join_upper10_lower6
       combfile = fopen(combfname,"w");
       if (combfile == NULL) {
@@ -218,9 +233,6 @@ int main(int argc, char **argv)
   if(parser->do_predict){
     parser->hprediction = 0; //At the beginning, we predict that the header will be right at the beginning!
     parser->num_badp = 0;
-    /* if(parser->strip_packet){ */
-    /*   parser->hprediction = parser->hdrsz; */
-    /* } */
   }
 
   //Start looping through file
@@ -237,18 +249,14 @@ int main(int argc, char **argv)
     parser->bufpos = 0;
     parser->delbytes = 0;
 
-    //Might consider adding || parser->packetpos != header->pack_sz
-    //No, definitely don't want to do this, actually. Will prematurely end loop
     while(  parser->bufpos < parser->bufrem ){
 
       if(parser->strip_packet) { usleep(4000); }
 	else { usleep(6000); }
 
-      //channel info works preemptively
-
       parse_tcp_header(parser, buff, tcp_hdr);       //get new header_addr here
 
-      update_after_parse_header(parser, buff, tcp_hdr);       //new hpos, packetpos, if applicable 
+      update_after_parse_header(parser, buff, tcp_hdr);       //new hpos, bufpos, packetpos, if applicable 
 
       if( parser->strip_packet ){
 
@@ -265,35 +273,29 @@ int main(int argc, char **argv)
       //Channel stuff
       if( parser->do_chans ){
 
-	//Get new packet info, if applicable
+      	bool moresamps = true;      
+      	long int tmp_buf_pos = parser->bufpos;
+
+	parser->bufpos += ( parser->hdrsz - 4 ); //get_chan_samples assumes we start at numsamps bytes
+
+	//get new packet stuff, if applicable
 	if( parser->parse_ok ){
 	  for(int i = 0; i < parser->nchans; i++){
-	    update_chan_info( chan[i], tcp_hdr, parser, buff );
+	    update_chans_post_parse( chan[i], tcp_hdr, parser, buff );
 	  }
+	    parser->bufpos += ( parser->hdrsz - 4); //skip ahead of header for channel numsamps
 	}
 
-      	bool moresamps = true;
-      	int hasallsamps = 0;
-	int maxpossible = 0;
-      
-      	long int tmp_buf_pos = parser->bufpos;
-	
-      	while( moresamps ){
-	  
       	  for(int j = 0; j < parser->nchans; j++ ){
-      	    moresamps = get_chan_samples( chan[i] , parser, tcp_hdr );
-      	    if( moresamps ) hasallsamps++;
+      	    if( moresamps ) {
+	      moresamps = get_chan_samples( chan[j] , buff, parser, tcp_hdr );
+	      //	      parser->bufpos += 4; 
+	    } else { break; }
       	  }
-      	  if( hasallsamps == parser->nchans ){
-      	    //
-      	  }
-      	}
 
       	parser->bufpos = tmp_buf_pos; //set it to what it was before channels messed with it
 
-
-
-	if( parser->do_chans = 3 ){ //time to combine channels zero and one
+	if( parser->do_chans > 1 ){ //time to write chan data
 	  
 	  int npacks_ready = 0;
 	  int noldpacks_ready = 0;
@@ -308,17 +310,24 @@ int main(int argc, char **argv)
 	    }
 	  }
 	  if( npacks_ready = 2 ) {
-	    combine_and_write_chandata( chan[0], chan[1], 0, parser, tcp_hdr );
-	    //clean up after combo, reset vars?
+	    combine_and_write_chandata( chan[0], chan[1], 0, parser, tcp_hdr, combfile );
 	  }
-	  else if( noldpacks_ready = 2 ){
-	    combine_and_write_chandata( chan[0], chan[1], 1, parser, tcp_hdr );
-	    //clean up after combo, reset vars?
+	  
+	  if( noldpacks_ready = 2 ){
+	    combine_and_write_chandata( chan[0], chan[1], 1, parser, tcp_hdr, combfile );
 	  }
 	  else {
 	  printf ("Not all channels are prepared to do data combination!\n");
 	  }
 	} //end combine channel data
+
+	//Get new packet info, if applicable
+	/* if( parser->parse_ok ){ */
+	/*   for(int i = 0; i < parser->nchans; i++){ */
+	/*     update_chans_post_parse( chan[i], tcp_hdr, parser, buff ); */
+	/*   } */
+	/* } */
+
       } //end do_chans
     
       if( parser->parse_ok ){
@@ -327,11 +336,6 @@ int main(int argc, char **argv)
 	print_tcp_header(tcp_hdr);
 	if( DEF_VERBOSE ) print_raw_tcp_header(tcp_hdr);
 	
-	if( parser ->do_chans ){
-	  for(int i = 0; i < parser->nchans; i++){
-	    print_chan_info( chan[i] );
-	  }
-	}
 	//Current header not where predicted?
 	if( parser->do_predict) {
 	  
@@ -354,6 +358,14 @@ int main(int argc, char **argv)
 
 	} 	
       }	
+
+      
+      if( parser ->do_chans ){                //clean up chans, reset buffs if possible
+	for(int i = 0; i < parser->nchans; i++){
+	  print_chan_info( chan[i] );
+	  clean_chan_buffer( chan[i] );
+	}
+      }
 
       update_end_of_buff(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
       
@@ -401,11 +413,21 @@ int main(int argc, char **argv)
       if( ( parser->do_chans == 2 ) || ( parser->do_chans == 3 ) ){ //open files for chandata
 	free( chan[i]->outfile );
       }	
-      free_chan( chan[i] );
+      //      free_chan( chan[i] );
+      free( chan[i] );
     }
-      if( parser->do_chans == 3){ //doing join_upper10_lower6
-	free( combfile );
+    //chan buffs
+    for(int i = 0; i < parser->nchans; i++){
+      free ( chanbuff[i] );
+      if( chan[i]->is_asynchr ){
+	free ( chantimestamps[i] );
       }
+    }
+    
+    
+    if( parser->do_chans == 3){ //doing join_upper10_lower6
+      free( combfile );
+    }
   }
   //  free_parser(parser);
   free(parser);

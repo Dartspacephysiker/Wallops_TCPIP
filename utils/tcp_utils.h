@@ -91,7 +91,7 @@ struct tcp_parser {
  *6 - 64-bit signed int "long long int" or "int64_t"
  *7 - Double floating point (64-bit) "double" or "double_t"
  */
-static uint8_t chan_data_size[8] = { 8, 8, 16, 16, 32, 32, 64, 64 }; //indexes the sizes of data types above
+static uint8_t chan_data_size[8] = { 1, 1, 2, 2, 4, 4, 8, 8 }; //indexes the sizes of data types above
 
 struct dewe_chan {
 
@@ -103,14 +103,14 @@ struct dewe_chan {
   int8_t dsize;
 
   long int bufsize;
-  long int bufroom;
 
   //There must be a better way, but so be it...
   union dtype {
     uint8_t *type0;
     int8_t *type1;
     uint16_t *type2;
-    int16_t *type3;
+    //    int16_t *type3;
+    char *type3;
     uint32_t *type4;
     int32_t *type5;
     int64_t *type6;
@@ -120,13 +120,13 @@ struct dewe_chan {
   //these variables accommodate the unfortunate reality that most DEWESoft packets come through piecemeal
   // and that a given receive buffer probably contains data from an old packet as well as a new one
 
-  void *oldpackaddr; //address of the beginning of the old packet samples
+  char *oldpackaddr; //address of the beginning of the old packet samples
   int32_t oldnum_received; //number of samples currently held in buffer from an OLD packet
   int32_t oldnumsamps; //number of samples contained in OLD packet
   //  int32_t oldnum_not_received; //number of samples that we still haven't parsed through from the OLD packet
   bool oldpack_ready;
 
-  void *packaddr; //address of the beginning of new packet samples
+  char *packaddr; //address of the beginning of new packet samples
   int32_t num_received; //number of samples currently held in buffer from a newly parsed packet
   int32_t numsamps; //number of samples contained in newly parsed packet
   //  int32_t num_not_received; //number of samples that we still haven't parsed through from the NEW packet
@@ -134,7 +134,10 @@ struct dewe_chan {
 
   //for async channels
   bool is_asynchr;
-  int64_t *timestamps; 
+  //  int64_t *timestamps; 
+  char *timestamps;
+  char * tstamps_addr;
+  char *oldtstamps_addr;
 
   char outfname[128];
   FILE *outfile;
@@ -161,13 +164,14 @@ int strip_tcp_packet(struct tcp_parser *, char *, struct tcp_header *);
 int post_strip(struct tcp_parser *, char *, struct tcp_header *);
 
 //chan routines
-int get_chan_samples(struct dewe_chan *, struct tcp_parser *, struct tcp_header *);
+int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *);
 int write_chan_samples(struct dewe_chan *, struct tcp_parser *, struct tcp_header *);
-int update_chan_info(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
+int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
-int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, struct tcp_header *);
+int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, struct tcp_header *, FILE *);
 int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
+int clean_chan_buffer(struct dewe_chan *);
 
 //end of buffer routines
 int update_end_of_buff(struct tcp_parser *, char *, struct tcp_header *);
