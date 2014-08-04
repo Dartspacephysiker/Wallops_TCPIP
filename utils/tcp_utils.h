@@ -164,7 +164,7 @@ int strip_tcp_packet(struct tcp_parser *, char *, struct tcp_header *);
 int post_strip(struct tcp_parser *, char *, struct tcp_header *);
 
 //chan routines
-int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *);
+int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *, bool);
 int write_chan_samples(struct dewe_chan *, struct tcp_parser *, struct tcp_header *);
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
@@ -173,8 +173,8 @@ int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 int clean_chan_buffer(struct dewe_chan *);
 
-//end of buffer routines
-int update_end_of_buff(struct tcp_parser *, char *, struct tcp_header *);
+//end of loop routines
+int update_end_of_loop(struct tcp_parser *, char *, struct tcp_header *);
 
 //finisher routines
 void print_stats(struct tcp_parser *);

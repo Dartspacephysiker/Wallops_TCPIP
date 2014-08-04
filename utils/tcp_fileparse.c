@@ -243,7 +243,7 @@ int main(int argc, char **argv)
   int count = 0;
   while( ( bufcount = fread(buff, 1, bufsz, datafile) ) > 0 && running ) {
     
-    printf("\n***\nBuffer #%i\n***\n",i);
+    printf("\n***\nBuffer #%i\n***\n",i+1);
 
     parser->bufrem = bufcount;
     parser->bufpos = 0;
@@ -276,23 +276,43 @@ int main(int argc, char **argv)
       	bool moresamps = true;      
       	long int tmp_buf_pos = parser->bufpos;
 
-	parser->bufpos += ( parser->hdrsz - 4 ); //get_chan_samples assumes we start at numsamps bytes
+  
+
+	//	parser->bufpos += ( parser->hdrsz - 4 ); //get_chan_samples assumes we start at numsamps bytes
 
 	//get new packet stuff, if applicable
 	if( parser->parse_ok ){
+	  
 	  for(int i = 0; i < parser->nchans; i++){
 	    update_chans_post_parse( chan[i], tcp_hdr, parser, buff );
 	  }
-	    parser->bufpos += ( parser->hdrsz - 4); //skip ahead of header for channel numsamps
+	  
+	  parser->bufpos = 0;
+	  
+	  for(int i = 0; i < parser->nchans; i++){
+	    if( parser->bufpos < parser->hpos ){
+	      if( DEBUG ) {
+		printf("tcp_fileparse.c [main()] CH%i: Doing old samples\n", i );
+		printf("tcp_fileparse.c [main()] CH%i: Bufpos = %li\n", i, parser->bufpos );
+		printf("tcp_fileparse.c [main()] CH%i: hpos = %li\n", i, parser->hpos );
+	      }
+	      get_chan_samples( chan[i], buff, parser, tcp_hdr, true);
+	    }
+	  }
+	  if( DEBUG ) printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
+	  parser->bufpos += ( parser->hdrsz - 4 ); //skip header for next get_chan_samples
+	}  
+	  
+	moresamps = true; //reset for next bit
+      
+
+	for(int j = 0; j < parser->nchans; j++ ){
+	  if( moresamps ) {
+	    moresamps = get_chan_samples( chan[j], buff, parser, tcp_hdr, false);
+	    //	      parser->bufpos += 4; 
+	  } else { break; }
 	}
-
-      	  for(int j = 0; j < parser->nchans; j++ ){
-      	    if( moresamps ) {
-	      moresamps = get_chan_samples( chan[j] , buff, parser, tcp_hdr );
-	      //	      parser->bufpos += 4; 
-	    } else { break; }
-      	  }
-
+	
       	parser->bufpos = tmp_buf_pos; //set it to what it was before channels messed with it
 
 	if( parser->do_chans > 1 ){ //time to write chan data
@@ -367,7 +387,7 @@ int main(int argc, char **argv)
 	}
       }
 
-      update_end_of_buff(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
+      update_end_of_loop(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
       
     } //end of current buffer
 
