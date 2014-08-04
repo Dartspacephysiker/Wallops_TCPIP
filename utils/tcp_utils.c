@@ -104,19 +104,30 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
     
     //    c->oldpackaddr = NULL;
     c->oldpackaddr = c->d.type3;
-    c->oldnum_received = 0;
+    c->oldnumsampbytes = 0;
+    c->oldnumbytes_received = 0;
     c->oldnumsamps = 0;
+    c->oldnum_received = 0;
     c->oldpack_ready = false;
 
     //    c->packaddr = NULL;
     c->packaddr = c->d.type3;
-    c->num_received = 0;
+    c->numsampbytes = 0;
+    c->numbytes_received = 0;
     c->numsamps = 0;
+    c->num_received = 0;
     c->pack_ready = false;
 
     if(is_asynchr){
       c->is_asynchr = true;
       //      c->timestamps = malloc( MAXNUMSAMPS * 8); //Accommodate 64-bit timestamps
+
+      c->oldnumtbytes = 0;
+      c->oldtbytes_received = 0;
+      
+      c->numtbytes = 0;
+      c->tbytes_received = 0;
+      
     }
     else {
       c->is_asynchr = false;
@@ -573,20 +584,31 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
 
   //Swap out old values
   //  if( c->
-  c->oldnumsamps =  c->numsamps;
   c->oldpackaddr = c->packaddr;
+  c->oldnumbytes_received = c->numbytes_received;
+  c->oldnumsampbytes = c->numsampbytes;
   c->oldnum_received = c->num_received;
+  c->oldnumsamps =  c->numsamps;
   c->oldpack_ready = c->pack_ready;
 
   //This is a new packet, after all
+  //  c->packaddr = c->oldpackaddr + ( c->oldnumsamps * c->dsize );  //packaddr is always oldnumsamps ahead of oldpackaddr
+  c->packaddr = c->oldpackaddr + c->oldnumsampbytes;  //packaddr is always oldnumsamps ahead of oldpackaddr
+  c->numsampbytes = th->sync_numsamps *  c->dsize;
+  c->numbytes_received = 0;
   c->numsamps = th->sync_numsamps;
-  c->packaddr = c->oldpackaddr + ( c->oldnumsamps * c->dsize );  //packaddr is always oldnumsamps ahead of oldpackaddr
   c->num_received = 0;  
   c->pack_ready = false;
 
   if( c->is_asynchr ){
+    c->oldnumtbytes = c-> numtbytes;
+    c->oldtbytes_received = c->tbytes_received;
     c->oldtstamps_addr = c->tstamps_addr;
-    c->tstamps_addr = c->oldpackaddr + ( c->oldnumsamps * 8 );
+
+    c->numtbytes = th->sync_numsamps * 8;
+    c->tbytes_received = 0;
+    c->tstamps_addr = c->oldtstamps_addr + c->oldnumtbytes;
+    //    c->tstamps_addr = c->oldpackaddr + ( c->oldnumsamps * 8 ); //THIS WAS WRONG IN ANY CASE
   }
 
   return EXIT_SUCCESS;
@@ -594,78 +616,91 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
 
 int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p , struct tcp_header *th, bool old){
 
-  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()]\n");
-
   bool moresamps;
-  int totdsize;
 
-  if( c->is_asynchr ){
-    totdsize = c->dsize + 8; //accommodate timestamps
-  }
-  else {
-    totdsize = c->dsize;
+  if( DEBUG ) {
+    printf("tcp_utils.c [get_chan_samples()]\n");
+    printf("tcp_utils.c [get_chan_samples()] CH%i looking for old samples: %i\n", c->num, old);
+    printf("tcp_utils.c [get_chan_samples()] buf_addr:\t\t\t\t\t%p\n", buf_addr );
+    printf("tcp_utils.c [get_chan_samples()] buf_addr + p->bufpos:\t\t\t\t%p\n", buf_addr + p->bufpos );
   }
 
   //handle old samples for this channel
   //only happens when we get a new packet
   if( old ){
-    if( ( c->oldnumsamps != 0 ) && ( c->oldnum_received != c->oldnumsamps ) ){   //handle_previous_chansamps
 
-      if( c->oldnum_received == 0 ){ //we're sitting on a gold mine; should be numsamps right here
+      //      int32_t oldsampsrem = c->oldnumsamps - c->oldnum_received;
+      int32_t oldbytesrem = c->oldnumsampbytes - c->oldnumbytes_received;
+      int32_t oldtbytesrem = c->oldnumtbytes - c->oldtbytes_received; 
+      int32_t totoldbytesrem = oldbytesrem + oldtbytesrem;
+
+    if( totoldbytesrem != 0 ){   //handle_previous_chansamps      
+      if( c->oldnumbytes_received == 0 ){ //we're sitting on a gold mine; should be numsamps right here
 	if( DEBUG ){
 	  printf("tcp_utils.c [get_chan_samples()] CH %i Oldnumsamps according to oldparse:\t%i\n", 
 		 c->num, c->oldnumsamps);
 	  printf("tcp_utils.c [get_chan_samples()] CH %i Oldnumsamps according to bufpos:\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
-	  for( int i = 0; i < 10; i++){
-	    printf("%i\t",i);
-	  }
-	  printf("\n");
-	  for( int i = 0; i < 10; i++){
-	    printf("%#hX\t",(buf_addr+p->bufpos));
-	  }
+	  /* for( int i = 0; i < 10; i++){ */
+	  /*   printf("%i\t",i); */
+	  /* } */
+	  /* printf("\n"); */
+	  /* for( int i = 0; i < 10; i++){ */
+	  /*   printf("%#hX\t",(buf_addr+p->bufpos)); */
+	  /* } */
 	}
+	p->bufpos += 4; //increment to skip numsamp info in buffer
+
       }
-      p->bufpos += 4; //increment to skip numsamp info in buffer
       
-      int32_t oldsampsrem = c->oldnumsamps - c->oldnum_received;
-
       //this check shouldn't even be necessary. I'm using it to check my math.
-      if( ( p->hpos - p->bufpos ) >= ( totdsize * ( c->oldnumsamps - c->oldnum_received ) ) ){ //we can get em all
-
-	memcpy( (void *)((long int)c->oldpackaddr + (long int)( c->oldnum_received * c->dsize )), 
-		(void *)((long int)buf_addr + p->bufpos ), oldsampsrem * c->dsize ); 
-
-	p->bufpos += oldsampsrem * c->dsize;
+      if( ( p->hpos - p->bufpos ) >=  totoldbytesrem ){ //we can get em all
+	/* memcpy( (void *)((long int)c->oldpackaddr + (long int)( c->oldnum_received * c->dsize )),  */
+	/* 	(void *)((long int)buf_addr + p->bufpos ), oldsampsrem * c->dsize );  */
+	memcpy( (void *)(long int)c->oldpackaddr + (long int)c->oldnumbytes_received, 
+		(void *)((long int)buf_addr + p->bufpos ), oldbytesrem ); 
+	
+	//	p->bufpos += oldsampsrem * c->dsize;
+	p->bufpos += oldbytesrem;
 	
 	if( c->is_asynchr ){
-	  memcpy( (void *)((long int)c->oldtstamps_addr + (long int)( c->oldnum_received * 8 )), 
-		  (void *)((long int)buf_addr + p->bufpos ), oldsampsrem * 8 ); 
+	  memcpy( (void *)(long int)c->oldtstamps_addr + (long int)c->oldtbytes_received , 
+		  (void *)((long int)buf_addr + p->bufpos ), oldtbytesrem ); 
 	  
-	  p->bufpos += oldsampsrem * 8;
-	  
+	  p->bufpos += oldtbytesrem;
+	  c->oldtbytes_received = c->oldnumtbytes;	  
 	}
-	//	p->bufpos += oldsampsrem * totdsize; //BETTER LINE, but use above for debug
+	
+	c->oldnumbytes_received = c->oldnumsampbytes;
 	c->oldnum_received = c->oldnumsamps;
 	c->oldpack_ready = true;
-	
+    
       }
       else { 
 	printf("tcp_utils.c [get_chan_samples()] A logical contradiction. How can you have read a new header"
 	       " and yet still not have all the previous packet's samples?\n");
       } 
 
-      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i oldnumsamps\t=\t%i\n",c->num,c->oldnumsamps);
-      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i oldnumreceived\t=\t%i\n",c->num,c->oldnum_received);
+      if( DEBUG ) {
+	printf("tcp_utils.c [get_chan_samples()] CH%i Got all %li old samp bytes\n",c->num, oldbytesrem); 
+	if( c->is_asynchr ){
+	  printf("tcp_utils.c [get_chan_samples()] CH%i Got all %li old tstamp bytes\n",c->num, oldtbytesrem); 
+	}
+      }
     }
     moresamps = true;
   }
-  else { //new samples
+  else { //current samples
     
-    if( c->num_received == 0 ){ //at the beginning of new set of samples for this channel
+    //    int32_t sampsrem = c->oldnumsamps - c->oldnum_received;
+    int32_t bytesrem = c->numsampbytes - c->numbytes_received;
+    int32_t tbytesrem = c->numtbytes - c->tbytes_received; 
+    int32_t totbytesrem = bytesrem + tbytesrem;
+    
+    if( c->numbytes_received == 0 ){ //at the beginning of new set of samples for this channel
       if( DEBUG ){
 	printf("tcp_utils.c [get_chan_samples()] New samples for CH %i!\n", c->num );
 	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to newparse:\t%i\n", c->num, c->numsamps);
-	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to bufpos:\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
+	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to bufpos:\t\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
 	/* for( int i = 0; i < 10; i++){ */
 	/*   printf("%i\t",i); */
 	/* } */
@@ -678,45 +713,88 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
     }
     
     //if buff contains all samples for this channel
-    if( ( p->bufrem - p->bufpos ) >= ( c->numsamps - c->num_received ) * totdsize ) { 
-
+    if( ( p->bufrem - p->bufpos ) >= totbytesrem ) { 
       if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff contains all samples\n", c->num );
-      printf("tcp_utils.c [get_chan_samples()] buf_addr: %p\n", buf_addr );
-      printf("tcp_utils.c [get_chan_samples()] buf_addr + p->bufpos: %p\n", buf_addr + p->bufpos );
-
-      memcpy( c->packaddr + ( c->num_received * c->dsize ), 
-	      (void *)( (long int)buf_addr + (long int)p->bufpos ), c->numsamps * c->dsize );
+      
+      /* memcpy( c->packaddr + ( c->num_received * c->dsize ),  */
+      /* 	      (void *)( (long int)buf_addr + (long int)p->bufpos ), c->numsamps * c->dsize ); */
+      /* if( c->is_asynchr ){ */
+      /* 	memcpy( (void *)((long int)c->tstamps_addr + (long int)(c->num_received * 8 )),  */
+      /* 		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 );  */
+      /* }       */
+      memcpy( c->packaddr + c->numbytes_received, 
+	      (void *)( (long int)buf_addr + (long int)p->bufpos ), bytesrem );
+      
+      p->bufpos += bytesrem;
+      c->numbytes_received = c->numsampbytes;
+      c->num_received = c->numsamps;
+      
       if( c->is_asynchr ){
-	memcpy( (void *)((long int)c->tstamps_addr + (long int)(c->num_received * 8 )), 
-		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 ); 
+	memcpy( (void *)((long int)c->tstamps_addr + (long int)c->tbytes_received ), 
+		(void *)((long int)buf_addr + p->bufpos ), tbytesrem); 
+	
+	p->bufpos += tbytesrem;
+	c->tbytes_received = c->numtbytes;
+	
       }      
       
-      p->bufpos += c->numsamps * totdsize;
-      c->num_received = c->numsamps;
       c->pack_ready = true;
-
       moresamps = true;
     } 
     else {
-      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff DOESN'T contain all samples\n", c->num );
-      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: Reportedly receiving %f samps\n", c->num,
-			 (float)( p->bufrem - p->bufpos) / (float) totdsize); //should be an int
-      memcpy( c->packaddr, (void *)((long int)buf_addr + (long int)p->bufpos ), p->bufrem - p->bufpos );
-      if( c->is_asynchr ){
-	memcpy( (void *)((long int)c->tstamps_addr + (long int)( c->num_received * 8 )), 
-		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 ); 
-      }      
+      
+      int32_t bufbytes = p->bufrem - p->bufpos;
+      int32_t to_chanbuff;
+      if( bufbytes >= bytesrem ) to_chanbuff = bytesrem;
+      else to_chanbuff = bufbytes;
+      
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff DOESN'T contain all channel bytes\n", c->num );
+      if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: Reportedly receiving %f samples\n", c->num,
+			 (float)( to_chanbuff ) / (float) c->dsize ); //should be an int
+      memcpy( c->packaddr, (void *)((long int)buf_addr + (long int)p->bufpos ), to_chanbuff );
 
-      c->num_received += ( p->bufrem - p->bufpos ) / totdsize;
+      c->numbytes_received += to_chanbuff;
+      c->num_received += to_chanbuff / c->dsize;
+
+      p->bufpos += to_chanbuff;
+      
+      if ( p->bufpos  < p->bufrem ){ //still got some juice left
+	
+	if( DEBUG ) {
+	  printf("tcp_utils.c [get_chan_samples()] CH%i: p->bufpos =\t\t\t\t%li\n", c->num, p->bufpos);
+	  printf("tcp_utils.c [get_chan_samples()] CH%i: p->bufrem =\t\t\t\t%li\n", c->num, p->bufrem);
+	}
+	
+	bufbytes = p->bufrem - p->bufpos;
+
+	if( c->is_asynchr ){
+	  
+	  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: Reportedly receiving %f timestamps\n", c->num,
+			     (float)( bufbytes ) / (float)8.0 ); //should be an int
+
+	  memcpy( (void *)((long int)c->tstamps_addr + (long int)c->tbytes_received), 
+		  (void *)((long int)buf_addr + p->bufpos ), bufbytes ); 
+
+	  c->tbytes_received += bufbytes;
+	  
+	  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: %li tbytes to go...\n", c->num,tbytesrem-bufbytes);
+	}      
+	else { 
+	  if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: Strange--you should never make it here\n", c->num);	  
+	}
+      }
+      else {
+	if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: ..but bufpos said it didn't have any more...\n", c->num);
+      }
       c->pack_ready = false;
       p->bufpos = p->bufrem; //end of buffer      
       moresamps = false;
     }
     
-    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numsamps\t=\t%i\n",c->num,c->numsamps);
-    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numreceived\t=\t%i\n",c->num,c->num_received);
-    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] Parser->bufpos\t\t=\t%i\n",c->num,p->bufpos);
-    if( DEBUG  )printf("tcp_utils.c [get_chan_samples()] CH%i--moresamps\t=\t%i\n",c->num,moresamps);
+    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numsamps\t=\t\t\t\t%i\n", c->num, c->numsamps);
+    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i numreceived\t=\t\t\t%i\n", c->num, c->num_received);
+    if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] Parser->bufpos\t\t=\t\t\t%li\n", p->bufpos);
+    if( DEBUG  )printf("tcp_utils.c [get_chan_samples()] CH%i--moresamps\t=\t\t\t\t%i\n", c->num, moresamps);
     
   } //end new samps  
 
@@ -798,18 +876,26 @@ int print_chan_info(struct dewe_chan *c){
   
   if( DEBUG ) printf("tcp_utils.c [print_chan_info()]\n");
   
-  printf("***Channel %i info:\n",c->num);
+  printf("***Channel %i info***\n",c->num);
   printf("\tNew samples start address:\t\t%p\n", c->packaddr);
-  printf("\tSample position in chan buff:\t%i\n", (long int)c->num_received );
-  printf("\tNumber of samples:\t\t%i\n", c->numsamps );
-  printf("\tNum received:\t\t%i\n", c->num_received );
-  //  printf("\tNum not received:\t%i\n", c->num_not_received );
+  printf("\tNum bytes received:\t\t\t%i\n", c->numbytes_received );
+  printf("\tNum sample bytes:\t\t\t%i\n", c->numsampbytes );
+  if( c->is_asynchr ){
+  printf("\tNum timestamp bytes received:\t\t%i\n", c->tbytes_received );    
+  printf("\tNum timestamp bytes:\t\t\t%i\n", c->numtbytes );    
+  }
+  printf("\tNum samps received:\t\t\t%i\n", c->num_received );
+  printf("\tNum samples:\t\t\t\t%i\n", c->numsamps );
   printf("\n");
-  printf("Old samples start address:\t%p\n", c->oldpackaddr);
-  printf("\tOld sample position:\t%i\n", c->oldnum_received );
-  printf("\tOld number of samples:\t%i\n", c->oldnumsamps );
-  printf("\tOldnum received:\t%i\n", c->oldnum_received );
-  //  printf("\tOldnum not received:\t%i\n", c->oldnum_not_received );
+  printf("\tOld samples start address:\t\t%p\n", c->oldpackaddr);
+  printf("\tOldnum bytes received:\t\t\t%i\n", c->oldnumbytes_received );
+  printf("\tOldnum sample bytes:\t\t\t%i\n", c->oldnumsampbytes );
+  if( c->is_asynchr ){
+  printf("\tOldnum timestamp bytes received:\t%i\n", c->oldtbytes_received );    
+  printf("\tOldnum timestamp bytes:\t\t\t%i\n", c->oldnumtbytes );    
+  }
+  printf("\tOldnum samps received:\t\t\t%i\n", c->oldnum_received );
+  printf("\tOldnum samples:\t\t\t\t%i\n", c->oldnumsamps );
 
 }
 
@@ -869,31 +955,47 @@ int clean_chan_buffer(struct dewe_chan *c){
   //hurt to reset oldpack stuff along the way
   if( c->oldpack_ready || c->pack_ready ){ 
 
-    if( DEF_VERBOSE ) printf("Cleared old packet data for CH%i...", c->num);
+    if( DEF_VERBOSE ) printf("Clearing old packet data for CH%i...", c->num);
 
     //now, if the new packet got handled as well
     if( c->pack_ready ){ //double bonus      
 
-      c->num_received = 0; 
+      if( DEF_VERBOSE ) printf("AND new packet data!\n");	  
+
+      c->numsampbytes = 0;
+      c->numbytes_received = 0;
       c->numsamps = 0;
+      c->num_received = 0; 
       c->pack_ready = false;
 
-      if( DEF_VERBOSE ) printf("AND new packet data!\n");	  
+      if(c->is_asynchr) {
+	c->numtbytes = 0;
+	c->tbytes_received = 0;
+      }
     }
     else{ 
-      memmove( c->d.type3, c->packaddr, c->num_received *  c->dsize ); //move new packet data to front of channel buff 
-      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->num_received * 8 ); //also timestamps, if applicable
+      //      memmove( c->d.type3, c->packaddr, c->num_received *  c->dsize ); //move new packet data to front of channel buff 
+      memmove( c->d.type3, c->packaddr, c->numbytes_received ); //move new packet data to front of channel buff 
+      //      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->num_received * 8 ); //also timestamps, if applicable
+      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->tbytes_received ); //also timestamps, if applicable
       if( DEF_VERBOSE ) printf("but current packet isn't ready!\n");
       if( DEF_VERBOSE ) printf("\n");  
     }
 
     c->oldpackaddr = c->packaddr = c->d.type3; //beginning of buffer for everyone
-    c->oldnum_received = 0;
+    
+    c->oldnumsampbytes = 0;
+    c->oldnumbytes_received = 0;
     c->oldnumsamps = 0;
+    c->oldnum_received = 0; 
     c->oldpack_ready = false;
+
 
     if( c->is_asynchr ){
       c->oldtstamps_addr = c->tstamps_addr = c->timestamps;
+
+      c->oldnumtbytes = 0;
+      c->oldtbytes_received = 0;
     }
 
 

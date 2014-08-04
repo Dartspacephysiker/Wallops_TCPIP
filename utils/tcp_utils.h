@@ -121,23 +121,31 @@ struct dewe_chan {
   // and that a given receive buffer probably contains data from an old packet as well as a new one
 
   char *oldpackaddr; //address of the beginning of the old packet samples
-  int32_t oldnum_received; //number of samples currently held in buffer from an OLD packet
+  int32_t oldnumsampbytes; 
+  int32_t oldnumbytes_received; 
   int32_t oldnumsamps; //number of samples contained in OLD packet
-  //  int32_t oldnum_not_received; //number of samples that we still haven't parsed through from the OLD packet
+  int32_t oldnum_received; //number of samples currently held in buffer from an OLD packet
   bool oldpack_ready;
 
   char *packaddr; //address of the beginning of new packet samples
-  int32_t num_received; //number of samples currently held in buffer from a newly parsed packet
+  int32_t numsampbytes; //same as numsamps, except in bytes
+  int32_t numbytes_received; //same as num_received, except in bytes
   int32_t numsamps; //number of samples contained in newly parsed packet
-  //  int32_t num_not_received; //number of samples that we still haven't parsed through from the NEW packet
+  int32_t num_received; //number of samples currently held in buffer from a newly parsed packet
   bool pack_ready;
 
   //for async channels
   bool is_asynchr;
-  //  int64_t *timestamps; 
-  char *timestamps;
-  char * tstamps_addr;
+  char *timestamps; //pointer to beginning of tstamp buff
+
   char *oldtstamps_addr;
+  int32_t oldnumtbytes;
+  int32_t oldtbytes_received;
+
+  char * tstamps_addr;
+  int32_t numtbytes;
+  int32_t tbytes_received;
+  
 
   char outfname[128];
   FILE *outfile;

@@ -26,7 +26,7 @@
 #include "tcp_utils.h"
 #include "tcp_fileparse.h"
 
-#define DEBUG 0
+#define DEBUG true
 #define DEF_VERBOSE true
 
 #define DEFMAX_BUFSZ 32768
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
       chan[i]->oldpackaddr = chan[i]->d.type3;
       if( chan[i]->is_asynchr ){
 	chantimestamps[i] = malloc( MAXNUMSAMPS * 8);
-	chan[i]->timestamps = chantimestamps[i];
+	chan[i]->oldtstamps_addr = chan[i]->tstamps_addr = chan[i]->timestamps = chantimestamps[i];
 	if( DEF_VERBOSE ) printf("tcp_fileparse.c [main()] Malloc'ed %i bytes for channel %u timestamps buffer...\n", MAXNUMSAMPS * 8, chan[i]->num );
       }
     }
@@ -276,19 +276,16 @@ int main(int argc, char **argv)
       	bool moresamps = true;      
       	long int tmp_buf_pos = parser->bufpos;
 
-  
+  	if( parser->parse_ok ){
 
-	//	parser->bufpos += ( parser->hdrsz - 4 ); //get_chan_samples assumes we start at numsamps bytes
-
-	//get new packet stuff, if applicable
-	if( parser->parse_ok ){
-	  
+	  //get new packet stuff, if applicable
 	  for(int i = 0; i < parser->nchans; i++){
 	    update_chans_post_parse( chan[i], tcp_hdr, parser, buff );
 	  }
 	  
-	  parser->bufpos = 0;
+	  parser->bufpos = 0; //temp set to zero because we want everything in the buffer BEHIND the new header
 	  
+	  //wrap up old channel data, which must be here since we got a new header
 	  for(int i = 0; i < parser->nchans; i++){
 	    if( parser->bufpos < parser->hpos ){
 	      if( DEBUG ) {
@@ -299,8 +296,11 @@ int main(int argc, char **argv)
 	      get_chan_samples( chan[i], buff, parser, tcp_hdr, true);
 	    }
 	  }
-	  if( DEBUG ) printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
-	  parser->bufpos += ( parser->hdrsz - 4 ); //skip header for next get_chan_samples
+	  if( DEBUG ) {
+	    printf("tcp_fileparse.c [main()] Finished oldsamps. Bufpos should be right behind hpos!\n");
+	    printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
+	  }
+	  parser->bufpos =  parser->hpos + parser->hdrsz - 4; //skip header for next get_chan_samples
 	}  
 	  
 	moresamps = true; //reset for next bit
