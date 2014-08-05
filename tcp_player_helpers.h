@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "tcp_player_struct.h"
+#include "tcp_utils.h"
 #include "defaults.h"
 
 int int_cmp(const void *, const void *);
@@ -21,7 +22,5 @@ void strfifo(char *, short *, int);
 void init_opt(struct player_opt *);
 int parse_opt(struct player_opt *, int, char **);
 void printe(char *, ...);
-void *parse_tcp_header(struct tcp_header *, char *, size_t);
-int print_tcp_header(struct tcp_header*);
 
 #endif /* EPP_HELPERS_H_ */

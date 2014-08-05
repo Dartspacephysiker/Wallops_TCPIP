@@ -94,7 +94,7 @@ int main (int argc, char * argv[])
       if ((nsockfd = accept(sockfd, (struct sockaddr *)&addr_remote, &sin_size)) == -1) 
 	printf ("ERROR: Obtain new Socket Descriptor error.\n");
       //      else printf ("[server] server has got connect from %s.\n", inet_ntoa(addr_remote.sin_addr));
-      while(f_block_sz = recv(nsockfd, revbuf, LENGTH, 0))
+      while( ( f_block_sz = recv(nsockfd, revbuf, LENGTH, 0) ) )
 	{
 	  if(f_block_sz < 0)
 	    {

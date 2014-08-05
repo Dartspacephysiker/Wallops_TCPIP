@@ -33,4 +33,8 @@
 
 #define MAXPORTS 4
 
+//channel defaults
+#define DEF_NUMCHANS 2
+#define MAX_NUMCHANS 4
+
 #endif /* DEFAULTS_H_ */

@@ -1,9 +1,9 @@
 /*
- * tcp_player.h
+ * tcp_fileparse.h
  *
- *  Ripped off: Jun 3, 2014
- *      Author: wibble
- *      Thief: SMH
+ *  Created: Aug 2014
+ *  Author: Hammertime
+ *
  */
 
 #ifndef EPP_PARSE_H_

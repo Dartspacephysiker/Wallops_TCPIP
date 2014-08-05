@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -g --std=gnu99
+CFLAGS = --std=gnu99 -Wall -g #-O2
 SERVER = server
 CLIENT = client
 FILEPARSE = tcp_fileparse

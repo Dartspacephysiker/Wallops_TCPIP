@@ -326,16 +326,30 @@ void *tcp_player_data_pt(void *threadarg) {
 
   
   struct tcp_header *tcp_hdr;
-  int tcp_hc = 0; //tcp header count
-  int tcp_tc = 0; //tcp footer count
-  int tcp_hdrsz = 40;
-  int tcp_tailsz = 8;
+  struct tcp_parser *parser;
+  char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+
+  /* int tcp_hc = 0; //tcp header count */
+  /* int tcp_tc = 0; //tcp footer count */
+  /* int tcp_hdrsz = 40; */
+  /* int tcp_tailsz = 8; */
   void *oldheader_loc;
   void *header_loc;
   void *tail_loc;
   long int tail_diff = 0;
   long int header_diff = 0;
   long int keep;
+
+  //Channel stuff
+  struct dewe_chan *chan[MAX_NUMCHANS];
+  char *chanbuff[MAX_NUMCHANS];
+  char *chantimestamps[MAX_NUMCHANS];
+  char combfname[] = "combined_chans.data";
+  FILE *combfile; //File for combining upper 10, lower 6 bits of two different channels
+                  //to accommodate the strange 10-bit TM data at Wallops
+
+
   /**************************************/
 
   //  struct tcp_header packet = { .start_str = { 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7 }, 
@@ -377,9 +391,40 @@ void *tcp_player_data_pt(void *threadarg) {
   fifo_outbytes = malloc(rtdbytes);
   long int fifo_count;
 
-  tcp_hdr = malloc( sizeof(struct tcp_header) );
-  char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
-			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+  //tcp header stuff
+  tcp_hdr = tcp_header_init();
+
+  //tcp parser stuff
+  parser = parser_init();
+
+  parser->hdrsz = 40; //per DEWESoft NET interface docs
+
+  //copy in start and tail string for use by parse_tcp_header() and strip_tcp_packet()
+  if( o.verbose ) printf("tcp_fileparse.c [main()] Start string:\t");
+  for (int i = 0; i < STARTSTR_SZ; i ++){
+    strncpy(&(parser->startstr[i]),&(tcp_str[8+i]),1);
+    if ( o.verbose ) printf("%x",parser->startstr[i]);
+  }
+  if( o.verbose ) printf("\n");
+  parser->startstr_sz = STARTSTR_SZ;
+
+  if( o.verbose ) printf("tcp_fileparse.c [main()] Tail string:\t");
+  strncpy(parser->tlstr,tcp_str,STARTSTR_SZ); 
+  if (o.verbose ){
+    for (int i = 0; i < STARTSTR_SZ; i ++){
+      printf("%x",parser->tlstr[i]);
+    }
+    printf("\n");
+  }
+  parser->tailsz = STARTSTR_SZ;
+  parser->oldhpos = -(parser->hdrsz + parser->tailsz); //Needs to be initialized thusly so that 
+  parser->do_predict = true;                           //parse_tcp_header doesn't complain that 
+  parser->isfile = false;                              //the first header isn't where predicted
+  parser->verbose = o.verbose;                              
+
+
+  
+
 
   //data setup
   dataz = malloc(arg.o.revbufsize);
@@ -495,7 +540,7 @@ void *tcp_player_data_pt(void *threadarg) {
 
     if (arg.o.dt > 0) {
       
-      tcp_hc = 0;
+      parser->hc = 0;
       tail_diff = 0;
       header_diff = 0;
       keep = (long int)count;
@@ -506,32 +551,32 @@ void *tcp_player_data_pt(void *threadarg) {
       /*In general, reads will finish before we find the tail, so we want to kill them right here*/
       if( (tail_loc != NULL ) && ( oldheader_loc != NULL ) && (tail_loc < oldheader_loc) ){
 	
-	if(arg.o.debug){ printf("**\ntail %i loc:%p\n**\n",tcp_hc, tail_loc); }
+	if(arg.o.debug){ printf("**\ntail %i loc:%p\n**\n",parser->hc, tail_loc); }
 	
 
 	//get diff between start of dataz and where tail was found so we don't move more than warranted
 	tail_diff = (long int)tail_loc - (long int)dataz;
 	if(arg.o.debug){ printf("tail diff:\t%li\n",tail_diff); }
 
-	keep -= ( tcp_tailsz + tail_diff );
+	keep -= ( parser->tailsz + tail_diff );
 
 	if(arg.o.debug) {printf("Copying %li bytes from %p to %p\n",keep,
-				tail_loc+tcp_tailsz, tail_loc); }
-	memmove(tail_loc, tail_loc+tcp_tailsz, keep); 
-	tcp_tc++; //Got 'im!
+				tail_loc+parser->tailsz, tail_loc); }
+	memmove(tail_loc, tail_loc+parser->tailsz, keep); 
+	parser->tc++; //Got 'im!
 	
-	oldheader_loc -= tcp_tailsz; 	  //We killed the tail string, so we need to update the header location
+	oldheader_loc -= parser->tailsz; 	  //We killed the tail string, so we need to update the header location
 
       }
 
       /*First go, in case dataz starts with a header*/
       //&tcp_str[8] is address for start string
       if( oldheader_loc != NULL ){
-	tcp_hc++;
-	if(arg.o.debug){printf("**\nheader %i loc:%p\n**\n",tcp_hc, oldheader_loc); }
+	parser->hc++;
+	if(arg.o.debug){printf("**\nheader %i loc:%p\n**\n",parser->hc, oldheader_loc); }
 	
 	//Get tcp packet header data
-	memcpy(tcp_hdr, oldheader_loc, tcp_hdrsz);
+	memcpy(tcp_hdr, oldheader_loc, parser->hdrsz);
 	
 	if((i-1) % imod == 0) print_tcp_header(tcp_hdr);
 	
@@ -539,19 +584,19 @@ void *tcp_player_data_pt(void *threadarg) {
 	header_diff = (long int)oldheader_loc - (long int)dataz;
 	if(arg.o.debug){ printf("header diff:\t%li\n",header_diff); }
 
-	keep =  count - tcp_hdrsz - header_diff; //Only deal with bytes that haven't been searched or discarded
+	keep =  count - parser->hdrsz - header_diff; //Only deal with bytes that haven't been searched or discarded
 
 	if(arg.o.debug) {printf("Copying %li bytes from %p to %p\n",keep,
-				oldheader_loc+tcp_hdrsz, oldheader_loc); }
-	memmove(oldheader_loc, oldheader_loc+tcp_hdrsz, keep); 
+				oldheader_loc+parser->hdrsz, oldheader_loc); }
+	memmove(oldheader_loc, oldheader_loc+parser->hdrsz, keep); 
 	//	}	
 
 	//Now data are moved, and oldheader_loc has no header there!
 	//loop while we can still find a footer immediately followed by a header
 	while( ( keep  > 0 )  &&
 	       ( ( header_loc = parse_tcp_header(tcp_hdr, oldheader_loc, keep ) )  != NULL ) ){
-	  tcp_hc++;
-	  tcp_tc++;
+	  parser->hc++;
+	  parser->tc++;
 
 	  //	  printf("**\nheader %i loc:%p\n**\n",tcp_hc,header_loc);
 	  //	  if((i-1) % imod == 0) pack_err = print_tcp_header(tcp_hdr);
@@ -564,13 +609,13 @@ void *tcp_player_data_pt(void *threadarg) {
 	    
 	  if(arg.o.debug) {printf("header diff:\t%li\n",header_diff); }
 
-	  keep = keep -  header_diff - tcp_hdrsz - tcp_tailsz; //only keep bytes not searched or discarded
+	  keep = keep -  header_diff - parser->hdrsz - parser->tailsz; //only keep bytes not searched or discarded
 
 	  if(arg.o.debug){ printf("Keep+totaldiff=\t%li\n",keep+(long int)header_loc-(long int)dataz); }
 
-	  //Notice that the following memmove looks at header_loc MINUS tcp_tailsz, which is because we want 
+	  //Notice that the following memmove looks at header_loc MINUS parser->tailsz, which is because we want 
 	  //to kill the footer of the TCPIP packet (i.e., {0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00})
-	  memmove(header_loc-tcp_tailsz,header_loc+tcp_hdrsz, keep ); 
+	  memmove(header_loc-parser->tailsz,header_loc+parser->hdrsz, keep ); 
 	  if(arg.o.debug){ printf("Kept %li bytes\n",keep); }
 	  //	  }
 
@@ -581,13 +626,13 @@ void *tcp_player_data_pt(void *threadarg) {
 
 
       //Want to write all data, excluding headers and footers we've killed
-      fifo_count = count - tcp_tc * tcp_tailsz - tcp_hc * tcp_hdrsz; 
+      fifo_count = count - parser->tc * parser->tailsz - parser->hc * parser->hdrsz; 
       fifo_write(fifo, dataz, fifo_count);
 
       //If we missed either a header or a footer, it will get FFTed and make display a little messy
       if ( (  parse_tcp_header(tcp_hdr, fifo->head, fifo_avail(fifo) ) ) != NULL ) {
 	printf("Missed a tcp header!!!\n"); }
-      if( ( memmem(fifo->head, fifo_avail(fifo), tcp_str, tcp_tailsz) ) != NULL ){
+      if( ( memmem(fifo->head, fifo_avail(fifo), tcp_str, parser->tailsz) ) != NULL ){
 	printf("Missed a footer!!!\n"); }
 
       if( fifo_avail(fifo) > 2*rtdbytes ) {

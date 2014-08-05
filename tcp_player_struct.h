@@ -111,18 +111,18 @@ union rtd_h_union {
  * Bytes 36-39: Number of samples
  * Bytes 40-(# of samples * sample data type, which should be two-byte unsigned words): Data
  */
-struct tcp_header {
-  unsigned char start_str[8];
-  uint32_t pack_sz; //in bytes
-  uint32_t pack_type;
-  uint32_t pack_numsamps; //number of synchronous samples per channel 
-                          //(there should only be one channel)
-  uint64_t pack_totalsamps; //number of samples acquired so far
-  double pack_time; // as given above
+/* struct tcp_header { */
+/*   unsigned char start_str[8]; */
+/*   uint32_t pack_sz; //in bytes */
+/*   uint32_t pack_type; */
+/*   uint32_t pack_numsamps; //number of synchronous samples per channel  */
+/*                           //(there should only be one channel) */
+/*   uint64_t pack_totalsamps; //number of samples acquired so far */
+/*   double pack_time; // as given above */
 
-  uint32_t sync_numsamps;
+/*   uint32_t sync_numsamps; */
 
-};
+/* }; */
 
 /*
  * Define frame sync structure.  Pragma compiler directives

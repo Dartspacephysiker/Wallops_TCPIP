@@ -50,13 +50,11 @@ int main(int argc, char **argv)
   //TCP stuff
   struct tcp_header *tcp_hdr;
   struct tcp_parser *parser;
-  bool parse_ok = false;
-  bool careful_strip = true; //ensures things are where they say they are before junking them
+  //  bool careful_strip = true; //ensures things are where they say they are before junking them
   //  FILE *stripfile;
   char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
 
-  int numchans;
   struct dewe_chan *chan[MAX_NUMCHANS];
   char *chanbuff[MAX_NUMCHANS];
   char *chantimestamps[MAX_NUMCHANS];
@@ -421,7 +419,7 @@ int main(int argc, char **argv)
 
     	count = fwrite(buff, 1, parser->bufrem, parser->stripfile);
     	if( count == 0){
-    	  printf("Gerrorg writing to %s\n",parser->stripfile);
+    	  printf("Gerrorg writing to %s\n",parser->strip_fname);
     	}
     	parser->wcount += count;
 

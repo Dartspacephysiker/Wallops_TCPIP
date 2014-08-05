@@ -17,7 +17,7 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 int main(int argc, char *argv[])
 {
   char* f_name;
-  int err;
+  //  int err;
 
   int  imod = 10;
 

@@ -1,14 +1,14 @@
 CC = gcc
 
-CFLAGS = -fPIC -Wall -std=gnu99 -g #-O2
+CFLAGS = -fPIC -Wall -std=gnu99 -g -Iutils/ #-O2
 LDFLAGS = -pipe -Wall -lm -pthread -g #-O2
 
 EXEC = tcp_player
 
-SRC = simple_fifo.c tcp_player.c tcp_player_helpers.c 
+SRC = simple_fifo.c tcp_player.c tcp_player_helpers.c utils/tcp_utils.c
 OBJ = $(SRC:.c=.o)
 
-HEADERS = simple_fifo.h defaults.h tcp_player_errors.h tcp_player_helpers.h tcp_player_struct.h $(EXEC).h 
+HEADERS = simple_fifo.h defaults.h tcp_player_errors.h tcp_player_helpers.h tcp_player_struct.h tcp_utils.h $(EXEC).h 
 
 all: $(SRC) $(EXEC)
 
@@ -21,4 +21,4 @@ $(EXEC): $(OBJ)
 .PHONY: clean
 
 clean:
-	rm -f *.o $(EXEC)
+	rm -f *.o utils/*.o $(EXEC) 
