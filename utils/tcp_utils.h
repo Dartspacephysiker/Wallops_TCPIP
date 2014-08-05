@@ -14,7 +14,7 @@
 #include <math.h>
 
 #define STARTSTR_SZ 8
-#define MAXNUMSAMPS 30000
+#define MAXNUMSAMPS 20000
 
 //This assumes only one synchronous channel!
 struct tcp_header {
@@ -156,7 +156,6 @@ struct dewe_chan {
 
   char outfname[128];
   FILE *outfile;
-  int packs_tofile;
 
 };
 
@@ -181,13 +180,13 @@ int post_strip(struct tcp_parser *, char *, struct tcp_header *);
 
 //chan routines
 int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *, bool);
-int write_chan_samples(struct dewe_chan *, int, struct tcp_parser * );
+int write_chan_samples(struct dewe_chan *, struct tcp_parser *, struct tcp_header *);
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
-int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, FILE *);
+int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, struct tcp_header *, FILE *);
 int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
-int clean_chan_buffer(struct dewe_chan *, char );
+int clean_chan_buffer(struct dewe_chan *);
 
 //end of loop routines
 int update_end_of_loop(struct tcp_parser *, char *, struct tcp_header *);
