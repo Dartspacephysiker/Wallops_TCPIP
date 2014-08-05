@@ -4,7 +4,7 @@
  *  Created on: Mar 9, 2011
  *      Author: wibble
  *
- *  Jun 2, 2014, SMH: I've completely ripped of MPD's qusb_acq to do this
+ *  Jun 2, 2014, SMH: I've completely ripped off MPD's qusb_acq to do this
  */
 
 #ifndef DEFAULTS_H_
@@ -23,6 +23,7 @@
 /* Accommodate the weirdness right now */
 #define DEF_CFHEAD "Dartmouth College"
 
+#define DEF_DIGITDATA false //Digitizer data
 #define DEF_RTDSIZE 65536 // RTD Output size, words
 #define DEF_RTDFILE "/tmp/rtd/rtd.data"
 #define DEF_RTD_DT 0 // No RTD by default

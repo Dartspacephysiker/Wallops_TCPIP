@@ -38,6 +38,7 @@ void init_opt(struct player_opt *o) {
   o->prefix = DEF_PREFIX;
   o->outdir = DEF_OUTDIR;
   
+  o->digitizer_data = DEF_DIGITDATA;
   o->rtdsize = DEF_RTDSIZE;
   o->rtdfile = DEF_RTDFILE;
   o->dt = DEF_RTD_DT;
@@ -54,7 +55,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
   char *pn;
   int c, i = 0;
   
-  while (-1 != (c = getopt(argc, argv, "A:x:p:o:OP:s:S:C:R:m:rd:a:XvVh"))) {
+  while (-1 != (c = getopt(argc, argv, "A:x:p:P:o:s:gR:m:d:a:vVh"))) {
     switch (c) {
     case 'A':
       options->revbufsize = strtoul(optarg, NULL, 0);
@@ -84,6 +85,8 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
     case 's':
       options->sleeptime = strtoul(optarg, NULL, 0);
       break;
+    case 'g':
+      options->digitizer_data = true;
     case 'R':
       options->rtdsize = strtoul(optarg, NULL, 0);
       break;
@@ -114,6 +117,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
       printf("\t-o <s>\tSet output directory [%s].\n", DEF_OUTDIR);
       printf("\t-s <#>\tSet microseconds to sleep between acquisitions [Default: %u]\n", DEF_SLEEPTIME);
       printf("\n");
+      printf("\t-g Digitizer data (Real data, excludes search for Dartmouth headers) [Default: %i]\n", DEF_DIGITDATA);
       printf("\t-R <#>\tReal-time display output size (in words) [%i].\n", DEF_RTDSIZE);
       printf("\t-m <s>\tReal-time display file [%s].\n", DEF_RTDFILE);
       printf("\t-d <#>\tReal-time display output period [%i].\n", DEF_RTD_DT);

@@ -64,7 +64,9 @@ void tcp_play(struct player_opt o) {
   pthread_t *data_threads;
     
   short int **rtdframe, *rtdout = NULL;
-  struct header_info header;
+
+  union rtd_h_union rtdh;
+  //  struct header_info header;
   int rfd, active_threads = 0;
   char *rmap = NULL;
   struct stat sb;
@@ -116,7 +118,14 @@ void tcp_play(struct player_opt o) {
     if ((fstat(rfd, &sb) == -1) || (!S_ISREG(sb.st_mode))) {
       printe("Improper rtd file.\n"); return;
     }
-    int mapsize = o.num_ports*rtdsize + 100;
+    
+    int mapsize;
+    if(o.digitizer_data) {
+      mapsize = o.num_ports*rtdsize + 72;
+    }
+    else {
+      mapsize = o.num_ports*rtdsize + 100;
+    }
     char *zeroes = malloc(mapsize);
     memset(zeroes, 0, mapsize);
     ret = write(rfd, zeroes, mapsize);
@@ -132,17 +141,40 @@ void tcp_play(struct player_opt o) {
     /*
      * Set up basic RTD header
      */
-    header.num_read = o.rtdsize*o.num_ports;
-    sprintf(header.site_id,"%s","RxDSP Woot?");
-    header.hkey = 0xF00FABBA;
-    header.num_channels=o.num_ports;
-    header.channel_flags=0x0F;
-    header.num_samples=o.rtdsize;
-//!!! DOES THIS NEED TO BE CHANGED TO 960000?
-    header.sample_frequency=960000;
-    header.time_between_acquisitions=o.dt;
-    header.byte_packing=0;
-    header.code_version=0.1;
+    if(!o.digitizer_data){
+      rtdh.cprtd.num_read = o.rtdsize*o.num_ports;
+      sprintf(rtdh.cprtd.site_id,"%s","RxDSP Woot?");
+      rtdh.cprtd.hkey = 0xF00FABBA;
+      rtdh.cprtd.num_channels=o.num_ports;
+      rtdh.cprtd.channel_flags=0x0F;
+      rtdh.cprtd.num_samples=o.rtdsize;
+      rtdh.cprtd.sample_frequency=960000;
+      rtdh.cprtd.time_between_acquisitions=o.dt;
+      rtdh.cprtd.byte_packing=0;
+      rtdh.cprtd.code_version=0.1;
+    }
+    else {
+      rtdh.prtd.num_read = o.rtdsize*o.num_ports;
+      sprintf(rtdh.prtd.site_id,"%s","RxDSP Woot?");
+      rtdh.prtd.num_channels=o.num_ports;
+      rtdh.prtd.channel_flags=0x0F;
+      rtdh.prtd.num_samples=o.rtdsize;
+      rtdh.prtd.sample_frequency=960000;
+      rtdh.prtd.time_between_acquisitions=o.dt;
+      rtdh.prtd.byte_packing=0;
+      rtdh.prtd.code_version=0.1;
+    }
+/*     header.num_read = o.rtdsize*o.num_ports; */
+/*     sprintf(header.site_id,"%s","RxDSP Woot?"); */
+/*     header.hkey = 0xF00FABBA; */
+/*     header.num_channels=o.num_ports; */
+/*     header.channel_flags=0x0F; */
+/*     header.num_samples=o.rtdsize; */
+/* //!!! DOES THIS NEED TO BE CHANGED TO 960000? */
+/*     header.sample_frequency=960000; */
+/*     header.time_between_acquisitions=o.dt; */
+/*     header.byte_packing=0; */
+/*     header.code_version=0.1; */
   }
     
   /*
@@ -171,7 +203,17 @@ void tcp_play(struct player_opt o) {
     } else active_threads++;
   }
   
-  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_ports: %i.\n", sizeof(header), rtdsize, o.num_ports);
+  if (o.debug) {
+    if (!o.digitizer_data){
+      printf("Size of header: %lu, rtdsize: %i, o.num_ports: %i.\n", 
+	     sizeof( struct header_info ), rtdsize, o.num_ports);
+    }
+    else {
+      printf("Size of header: %lu, rtdsize: %i, o.num_ports: %i.\n", 
+	     sizeof( struct prtd_header_info ), rtdsize, o.num_ports);
+    }
+  }
+  //  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_ports: %i.\n", sizeof(header), rtdsize, o.num_ports);
 
 
   /*
@@ -193,13 +235,27 @@ void tcp_play(struct player_opt o) {
 	  pthread_mutex_unlock(&rtdlocks[i]);
 	}
 
-	header.start_time = time(NULL);
-	header.start_timeval = now;
-	header.averages = o.rtdavg;
+	if(!o.digitizer_data){
+	  rtdh.cprtd.start_time = time(NULL);
+	  rtdh.cprtd.start_timeval = now;
+	  rtdh.cprtd.averages = o.rtdavg;
+	/* header.start_time = time(NULL); */
+	/* header.start_timeval = now; */
+	/* header.averages = o.rtdavg; */
 
-	memmove(rmap, &header, sizeof(struct header_info));
-	memmove(rmap+102, rtdout, rtdsize*o.num_ports);
+	  memmove(rmap, &rtdh.cprtd, sizeof(struct header_info));
+	  memmove(rmap+102, rtdout, rtdsize*o.num_ports);
+	  /* memmove(rmap, &header, sizeof(struct header_info)); */
+	  /* memmove(rmap+102, rtdout, rtdsize*o.num_ports); */
 
+	}
+	else {
+	  rtdh.prtd.start_time = time(NULL);
+	  rtdh.prtd.start_timeval = now;
+
+	  memmove(rmap, &rtdh.prtd, sizeof(struct prtd_header_info));
+	  memmove(rmap+74, rtdout, rtdsize*o.num_ports);
+	}
 	then = now;
       }
 
@@ -425,7 +481,6 @@ void *tcp_player_data_pt(void *threadarg) {
 	*arg.running = false;
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
-    //    bzero(dataz, arg.o.revbufsize);
     wcount += ret;
   
     gettimeofday(&then, NULL);
