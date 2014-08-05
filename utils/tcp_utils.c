@@ -142,8 +142,6 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
     c->is_singleval = true;
   }
   
-  c->packs_tofile = 0;
-
   return c;
 
 }
@@ -312,11 +310,16 @@ int print_raw_tcp_header(struct tcp_header *th){
 
   int i = 0;
   int j = 0;
-  int rowmod = 20;
+  int rowmod = 2*STARTSTR_SZ;
 
+  size_t hdrsz = sizeof(struct tcp_header);
+
+<<<<<<< HEAD
   //  size_t hdrsz = sizeof(struct tcp_header);
   int hdrsz = sizeof(th->start_str) + sizeof(th->pack_sz) + sizeof(th->pack_type) + 
     sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->sync_numsamps);
+=======
+>>>>>>> parent of 1b2a97e... Holy Mack. I think it's all working, with a current packet loss rate of 3 out of every 85. I just need to sift and see what's happening.
   printf("\n*************\n");
   printf("Raw TCP header (%i bytes):\n", hdrsz );
 
@@ -356,6 +359,7 @@ int print_header_memberszinfo(struct tcp_header *th){
 
   printf("\n");
   printf("tcp_utils.c [print_header_memberszinfo()]\n");
+<<<<<<< HEAD
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof start_str\t%lu\n", sizeof(th->start_str));
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_sz:\t\t%lu\n", sizeof(th->pack_sz));
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_type:\t%lu\n", sizeof(th->pack_type));
@@ -364,6 +368,17 @@ int print_header_memberszinfo(struct tcp_header *th){
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_time:\t%lu\n", sizeof(th->pack_time));
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof sync_numsamps:\t%lu\n", sizeof(th->sync_numsamps));
   printf("tcp_utils.c [print_header_memberszinfo()] total header size: %lu\n", sizeof(th->start_str) + 
+=======
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof start_str\t%i\n", sizeof(th->start_str));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_sz:\t\t%i\n", sizeof(th->pack_sz));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_type:\t%i\n", sizeof(th->pack_type));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_numsamps:\t%i\n", sizeof(th->pack_numsamps));
+  //  printf("Total samples sent so far:\t%"PRIi64"\n", sizeof(th->pack_totalsamps));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof totalsamps:\t%i\n", sizeof(th->pack_totalsamps));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_time:\t%i\n", sizeof(th->pack_time));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof sync_numsamps:\t%i\n", sizeof(th->sync_numsamps));
+  printf("tcp_utils.c [print_header_memberszinfo()] total header size: %i\n", sizeof(th->start_str) + 
+>>>>>>> parent of 1b2a97e... Holy Mack. I think it's all working, with a current packet loss rate of 3 out of every 85. I just need to sift and see what's happening.
 	 sizeof(th->pack_sz) + sizeof(th->pack_type) + sizeof(th->pack_numsamps) + 
 	 sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->sync_numsamps));
   return EXIT_SUCCESS;
@@ -460,6 +475,8 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
   if( p->t_in_this_buff ){ //Time to get the tail
    
     //We'll just find it ourselves, since this tool needs to be independent of the program running it
+    //    tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + p-> startstr_sz + th->pack_sz + 
+    //			     p->tailsz - p->packetpos );
     tmp_tail_addr = (char *)((long int)buf_addr + p->bufpos + th->pack_sz - p->packetpos - p->tailsz );
 
     tmp_tail_pos = (long int)tmp_tail_addr - (long int)buf_addr;
@@ -472,6 +489,7 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
     if( p->tail_addr != NULL ){
 
       //First, get tail pos relative to current buffer      
+
       p->tpos = (long int)p->tail_addr - (long int)buf_addr;
       if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] tmp_tail_pos= %li\n", tmp_tail_pos); }
       if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] tail_pos= %li\n", p->tpos); }
@@ -596,6 +614,7 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
   c->oldpack_ready = c->pack_ready;
 
   //This is a new packet, after all
+  //  c->packaddr = c->oldpackaddr + ( c->oldnumsamps * c->dsize );  //packaddr is always oldnumsamps ahead of oldpackaddr
   c->packaddr = c->oldpackaddr + c->oldnumsampbytes;  //packaddr is always oldnumsamps ahead of oldpackaddr
   c->numsampbytes = th->sync_numsamps *  c->dsize;
   c->numbytes_received = 0;
@@ -643,6 +662,13 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
 	  printf("tcp_utils.c [get_chan_samples()] CH %i Oldnumsamps according to oldparse:\t%i\n", 
 		 c->num, c->oldnumsamps);
 	  printf("tcp_utils.c [get_chan_samples()] CH %i Oldnumsamps according to bufpos:\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
+	  /* for( int i = 0; i < 10; i++){ */
+	  /*   printf("%i\t",i); */
+	  /* } */
+	  /* printf("\n"); */
+	  /* for( int i = 0; i < 10; i++){ */
+	  /*   printf("%#hX\t",(buf_addr+p->bufpos)); */
+	  /* } */
 	}
 	p->bufpos += 4; //increment to skip numsamp info in buffer
 
@@ -650,6 +676,8 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
       
       //this check shouldn't even be necessary. I'm using it to check my math.
       if( ( p->hpos - p->bufpos ) >=  totoldbytesrem ){ //we can get em all
+	/* memcpy( (void *)((long int)c->oldpackaddr + (long int)( c->oldnum_received * c->dsize )),  */
+	/* 	(void *)((long int)buf_addr + p->bufpos ), oldsampsrem * c->dsize );  */
 	memcpy( (void *)(long int)c->oldpackaddr + (long int)c->oldnumbytes_received, 
 		(void *)((long int)buf_addr + p->bufpos ), oldbytesrem ); 
 	
@@ -695,6 +723,13 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
 	printf("tcp_utils.c [get_chan_samples()] New samples for CH %i!\n", c->num );
 	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to newparse:\t%i\n", c->num, c->numsamps);
 	printf("tcp_utils.c [get_chan_samples()] Numsamps in CH %i according to bufpos:\t\t%i\n", c->num, *((int32_t *)(buf_addr+p->bufpos)));
+	/* for( int i = 0; i < 10; i++){ */
+	/*   printf("%i\t",i); */
+	/* } */
+	/* printf("\n"); */
+	/* for( int i = 0; i < 10; i++){ */
+	/*   printf("%#hX\t",(buf_addr+p->bufpos)); */
+	/* } */
       }
       p->bufpos += 4; //skip ahead of channel header
     }
@@ -703,6 +738,12 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
     if( ( p->bufrem - p->bufpos ) >= totbytesrem ) { 
       if( DEBUG ) printf("tcp_utils.c [get_chan_samples()] CH%i: This buff contains all samples\n", c->num );
       
+      /* memcpy( c->packaddr + ( c->num_received * c->dsize ),  */
+      /* 	      (void *)( (long int)buf_addr + (long int)p->bufpos ), c->numsamps * c->dsize ); */
+      /* if( c->is_asynchr ){ */
+      /* 	memcpy( (void *)((long int)c->tstamps_addr + (long int)(c->num_received * 8 )),  */
+      /* 		(void *)((long int)buf_addr + p->bufpos ), c->numsamps * 8 );  */
+      /* }       */
       memcpy( c->packaddr + c->numbytes_received, 
 	      (void *)( (long int)buf_addr + (long int)p->bufpos ), bytesrem );
       
@@ -782,70 +823,19 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
   return moresamps;
 }
 
-int write_chan_samples(struct dewe_chan *c, int old, struct tcp_parser *p ){
+int write_chan_samples(struct dewe_chan *c, struct tcp_parser *p, struct tcp_header *th){
 
-  if( DEBUG ) {
-    printf("tcp_utils.c [write_chan_samples()] Channel %i\n", c->num );
-    printf("tcp_utils.c [write_chan_samples()] Old data: %i\n", old);
-  }
-  unsigned int *c_buffstart;
-  int64_t *c_tstamp_buffstart;
-  long int numsamps;
-  size_t dsize;
-  
-  if( old == 0 ){
-    
-    if( c->numsamps == 0 ) {
-      if( DEBUG ) printf("tcp_utils.c [write_chan_samples()] Doing new data with zero samps...poor logic\n");
-      return EXIT_FAILURE;
-    }
-    numsamps = c->numsamps;
-    
-    c_buffstart = (unsigned int *)c->packaddr;
-    if( c->is_asynchr ) c_tstamp_buffstart = (int64_t *)c->tstamps_addr;
-  }
-  else {
+  if( DEBUG ) printf("tcp_utils.c [write_chan_samples()] Channel %i\n", c->num );
 
-    if( c->oldnumsamps == 0 ){
-      if( DEBUG ) printf("tcp_utils.c [write_chan_samples()] Writing old data with zero samps...poor logic\n");
-      return EXIT_FAILURE;
-    }
-    numsamps = c->oldnumsamps;
-    
-    c_buffstart = (unsigned int *)c->oldpackaddr;
-    if( c->is_asynchr ) c_tstamp_buffstart = (int64_t *)c->oldtstamps_addr;
-  }
-  
-  /* if( c1->dsize != c2->dsize ){ */
-  /*   printf("Unequal data sizes for each channel!\n"); */
-  /*   printf("Channel %i datasize:\t%i\n", c1->num, c1->dsize); */
-  /*   printf("Channel %i datasize:\t%i\n", c2->num, c2->dsize); */
-  /*   return EXIT_FAILURE; */
-  /* } */
-  dsize = c->dsize;
-  
-  if( c_buffstart != NULL ){
-    fwrite( c_buffstart, dsize, numsamps, c->outfile);
-    if( c->is_asynchr ) fwrite( c_tstamp_buffstart, 8, numsamps, c->outfile);
-  }
-  else {
-    printf("tcp_utils.c [write_chan_data()] You just tried to slip me a null pointer! You code like a graduate student.\n");
-    return EXIT_FAILURE;
-  }
+  //  if
 
-  if( DEF_VERBOSE ) printf("Wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
-  c->packs_tofile += 1;
-
-  return EXIT_SUCCESS;
 
 }
 
-int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser * p,  FILE *outfile){
+int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser * p , struct tcp_header *th, FILE *outfile){
 
-  if( DEBUG ) {
-    printf("tcp_utils.c [combine_and_write_chandata()] Combining CH%i and CH%i\n", c1->num, c2->num);
-    printf("tcp_utils.c [combine_and_write_chandata()] Old data: %i\n", old);
-  }
+  if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()]\n");
+
   unsigned int *c1_buffstart;
   unsigned int *c2_buffstart;
   long int numsamps;
@@ -853,11 +843,7 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
   
   if( old == 0 ){
     
-    if( c1->numsamps == 0 || c2->numsamps == 0 ) {
-      if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()] Doing new data with zero samps...poor logic\n");
-      return EXIT_FAILURE;
-    }
-    else if( c1->numsamps != c2->numsamps ){
+    if( c1->numsamps != c2->numsamps ){
       printf("Unequal number of samples for each channel!\n");
       printf("Channel %i:\t%i\n", c1->num, c1->numsamps);
       printf("Channel %i:\t%i\n", c2->num, c2->numsamps);
@@ -870,11 +856,7 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
   }
   else {
     
-    if( c1->oldnumsamps == 0 || c2->oldnumsamps == 0 ){
-      if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()] Doing old data with zero samps...poor logic\n");
-      return EXIT_FAILURE;
-    }
-    else if( c1->oldnumsamps != c2->oldnumsamps ){
+    if( c1->oldnumsamps != c2->oldnumsamps ){
       printf("Unequal number of old samples for each channel!\n");
       printf("(old)Channel %i:\t%i\n", c1->num, c1->oldnumsamps);
       printf("(old)Channel %i:\t%i\n", c2->num, c2->oldnumsamps);
@@ -907,7 +889,6 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
   }
 
   if( DEF_VERBOSE ) printf("Combined and wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
-  p->npacks_combined += 1;
 
   return EXIT_SUCCESS;
 }
@@ -945,9 +926,7 @@ int print_chan_info(struct dewe_chan *c){
 //This function assumes that sizeof(short) >= 2 bytes
 int16_t join_chan_bits(char a, char b)
 {
-
-  return ( a << 8 ) + b;
-
+  return (a<<8) + b;
 }
 
 
@@ -965,16 +944,11 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
   else {
     //just in case lower has some garbage bits set above the lowest 6
     //    lower &= ~(0b1111111111 << 6);
-    /* if( DEBUG ) { */
-    /*   printf("ushort upper = 0X%hX\n", upper);					 */
-    /*   printf("ushort lower = 0X%hX\n", lower); */
-    /*   printf("ushort upper << 6 = 0X%hX\n",(upper << 6)); */
-    /*   printf("lower &= ~(0b1111111111 << 6): 0X%hX\n", ( lower &= ~( 0b1111111111 << 6 ) ) );  */
-    /*   printf("return of joinupper10_lower6(upper, lower, 0): 0X%hX\n", (upper << 10 ) ^ lower ); */
-    /* } */
     return (upper << 10) ^ lower;
   }
 }
+
+
 //Here's some code to test out the above functions:
   /* //test out this newfangled combine bit thing */
   /* unsigned char a = 0b11111111; */
@@ -989,67 +963,75 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
   /* unsigned short d = 0b110000000111111; */
   /* //result should be 0xFFFF for first case */
   /* printf("\n"); */
-  /* printf("ushort c = 0X%hX\n",c); */						
-  /* printf("ushort d = 0X%hX\n",d); */						
-  /* printf("ushort c<<6 = 0X%hX\n",(c<<6)); */					
+  /* printf("ushort c = 0X%hX\n",c); */
+  /* printf("ushort d = 0X%hX\n",d); */
+  /* printf("ushort c<<6 = 0X%hX\n",(c<<6)); */
   /* printf("d &= ~(0b1111111111 << 6): 0X%hX\n", (d &= ~(0b1111111111 << 6))); */
-  /* printf("(c<<6) ^ d = 0X%hX\n",((c<<6) ^ d)); */				
+  /* printf("(c<<6) ^ d = 0X%hX\n",((c<<6) ^ d)); */
   /* printf("return of joinupper10_lower6(c,d,0): 0X%hX\n",join_upper10_lower6(c,d,0)); */
   /* printf("return of joinupper10_lower6(c,d,1): 0X%hX\n",join_upper10_lower6(c,d,1)); */
 
-int clean_chan_buffer(struct dewe_chan *c, char current){
+int clean_chan_buffer(struct dewe_chan *c){
 
   if( DEBUG ) printf("tcp_utils.c [clean_chan_buffer()] CH%i\n", c->num);
 
   //well, if the current packet is ready the old one must be too or must have already been handled, so it doesn't
   //hurt to reset oldpack stuff along the way
-  //  if( c->oldpack_ready || c->pack_ready ){ 
+  if( c->oldpack_ready || c->pack_ready ){ 
 
-  if( DEF_VERBOSE ) printf("Clearing old packet data for CH%i...", c->num);
+    if( DEF_VERBOSE ) printf("Clearing old packet data for CH%i...", c->num);
 
-  //now, if the new packet got handled as well
-  //  if( c->pack_ready ){ //double bonus      
-  if( current ){ //double bonus      
-    
-    if( DEF_VERBOSE ) printf("AND new packet data!\n");	  
+    //now, if the new packet got handled as well
+    if( c->pack_ready ){ //double bonus      
 
-    c->numsampbytes = 0;
-    c->numbytes_received = 0;
-    c->numsamps = 0;
-    c->num_received = 0; 
-    c->pack_ready = false;
+      if( DEF_VERBOSE ) printf("AND new packet data!\n");	  
 
-    if(c->is_asynchr) {
-      c->numtbytes = 0;
-      c->tbytes_received = 0;
+      c->numsampbytes = 0;
+      c->numbytes_received = 0;
+      c->numsamps = 0;
+      c->num_received = 0; 
+      c->pack_ready = false;
+
+      if(c->is_asynchr) {
+	c->numtbytes = 0;
+	c->tbytes_received = 0;
+      }
     }
-  }
-  else{ 
-    //      memmove( c->d.type3, c->packaddr, c->num_received *  c->dsize ); //move new packet data to front of channel buff 
-    memmove( c->d.type3, c->packaddr, c->numbytes_received ); //move new packet data to front of channel buff 
-    //      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->num_received * 8 ); //also timestamps, if applicable
-    if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->tbytes_received ); //also timestamps, if applicable
-    if( DEF_VERBOSE ) printf("but current packet isn't ready!\n");
-    if( DEF_VERBOSE ) printf("\n");  
-  }
+    else{ 
+      //      memmove( c->d.type3, c->packaddr, c->num_received *  c->dsize ); //move new packet data to front of channel buff 
+      memmove( c->d.type3, c->packaddr, c->numbytes_received ); //move new packet data to front of channel buff 
+      //      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->num_received * 8 ); //also timestamps, if applicable
+      if( c->is_asynchr ) memmove( c->timestamps, c->tstamps_addr, c->tbytes_received ); //also timestamps, if applicable
+      if( DEF_VERBOSE ) printf("but current packet isn't ready!\n");
+      if( DEF_VERBOSE ) printf("\n");  
+    }
 
-  c->oldpackaddr = c->packaddr = c->d.type3; //beginning of buffer for everyone
+    c->oldpackaddr = c->packaddr = c->d.type3; //beginning of buffer for everyone
     
-  c->oldnumsampbytes = 0;
-  c->oldnumbytes_received = 0;
-  c->oldnumsamps = 0;
-  c->oldnum_received = 0; 
-  c->oldpack_ready = false;
+    c->oldnumsampbytes = 0;
+    c->oldnumbytes_received = 0;
+    c->oldnumsamps = 0;
+    c->oldnum_received = 0; 
+    c->oldpack_ready = false;
 
 
-  if( c->is_asynchr ){
-    c->oldtstamps_addr = c->tstamps_addr = c->timestamps;
+    if( c->is_asynchr ){
+      c->oldtstamps_addr = c->tstamps_addr = c->timestamps;
 
-    c->oldnumtbytes = 0;
-    c->oldtbytes_received = 0;
+      c->oldnumtbytes = 0;
+      c->oldtbytes_received = 0;
+    }
+
+
   }
+<<<<<<< HEAD
 
   return EXIT_SUCCESS;
+=======
+  /* else if( c->pack_ready ){ //bogus situation */
+  /*   if( DEF_VERBOSE ) printf("tcp_utils.c [clean_chan_buffer()] BOGUS!!\n"); */
+  /* } */
+>>>>>>> parent of 1b2a97e... Holy Mack. I think it's all working, with a current packet loss rate of 3 out of every 85. I just need to sift and see what's happening.
 }
 
 int update_end_of_loop(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
