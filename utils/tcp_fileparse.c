@@ -177,15 +177,31 @@ int main(int argc, char **argv)
 	sprintf(chan[i]->outfname,"chan%i.data",i);
 	chan[i]->outfile = fopen(chan[i]->outfname,"w");
 	if (chan[i]->outfile == NULL) {
-	  fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->outfname, i );
+	  fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->outfname, chan[i]->num );
 	  return(EXIT_FAILURE);
 	}
 	if( DEF_VERBOSE ){
-	  printf("Channel %i file: %p\n", i, chan[i]->outfile );
-	  printf("Channel %i filename: %s\n", i, chan[i]->outfname);
+	  printf("Channel %i file:\t\t%p\n", i, chan[i]->outfile );
+	  printf("Channel %i filename:\t\t%s\n", i, chan[i]->outfname);
+	}
+	
+	//tstamp files
+	if( chan[i]->is_asynchr ){
+
+	  sprintf(chan[i]->ts_fname,"chan%i_tstamps.data",i);
+	  chan[i]->ts_file = fopen(chan[i]->ts_fname,"w");
+	  if (chan[i]->ts_file == NULL) {
+	    fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->ts_fname, chan[i]->num );
+	    return(EXIT_FAILURE);
+	  }
+	  if( DEF_VERBOSE ){
+	    printf("Channel %i timestamp file:\t\t%p\n", i, chan[i]->ts_file );
+	    printf("Channel %i timestamp filename:\t\t%s\n", i, chan[i]->ts_fname);
+	  }
 	}
       }
     }
+
     //chan buffs
     for(int i = 0; i < parser->nchans; i++){
       chanbuff[i] = malloc( chan[i]->bufsize );
@@ -261,7 +277,7 @@ int main(int argc, char **argv)
 	
 	printf("*****Packet #%u*****\n",parser->numpackets);
 	print_tcp_header(tcp_hdr);
-	if( DEF_VERBOSE ) print_raw_tcp_header(tcp_hdr);
+	//	if( DEF_VERBOSE ) print_raw_tcp_header(tcp_hdr);
 	
 	//Current header not where predicted?
 	if( parser->do_predict) {
@@ -314,11 +330,19 @@ int main(int argc, char **argv)
 	    print_chan_info( chan[i] );
 	  }
 
-	  parser->bufpos = 0; //temp set to zero because we want everything in the buffer BEHIND the new header
-	  
+	  //temp set to zero because we want everything in the buffer BEHIND the new header
+	  if( parser->oldhpos < 0 ) {
+	    parser->bufpos = 0; 
+	  }
+	  else {
+	    parser->bufpos = parser->oldhpos; 
+	  }
+	    
 	  //wrap up old channel data, which will only be here if we got a new header
 	  for(int i = 0; i < parser->nchans; i++){
-	    if( parser->bufpos < parser->hpos ){
+	    //	    if( chan[i]->oldnumsampbytes != chan[i]->oldnumbytes_received && parser->bufpos < parser->hpos  ){
+	    if( ( chan[i]->oldnumsampbytes != chan[i]->oldnumbytes_received || 
+		  chan[i]->oldnumtbytes != chan[i]->oldtbytes_received) && parser->bufpos < parser->hpos  ){
 	      if( DEBUG ) {
 		printf("tcp_fileparse.c [main()] CH%i: Doing old samples\n", i );
 		printf("tcp_fileparse.c [main()] CH%i: Bufpos = %li\n", i, parser->bufpos );
@@ -329,6 +353,10 @@ int main(int argc, char **argv)
 	  }
 	  if( DEBUG ) {
 	    printf("tcp_fileparse.c [main()] Finished oldsamps. Bufpos should be right behind hpos!\n");
+	    //	    printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
+	  }
+	  if( (parser->bufpos += parser->tailsz ) != parser->hpos && parser->oldhpos > 0 ) {
+	    printf("Channels read incorrectly!!!\n");
 	    printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
 	  }
 	  parser->bufpos =  parser->hpos + parser->hdrsz - 4; //skip header for next get_chan_samples
@@ -364,21 +392,23 @@ int main(int argc, char **argv)
 	      
 	      if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 0, parser, combfile );
 	      for(int i = 0; i < 2; i ++){
-		write_chan_samples( chan[i], false, parser );
+		write_chan_samples( chan[i], false, parser, true );
 	      }
 
 	      if( noldpacks_ready == 2 ){
 		if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 1, parser, combfile );
 		for(int i = 0; i < 2; i ++){
-		  write_chan_samples( chan[i], true, parser );
+		  write_chan_samples( chan[i], true, parser, true );
 		}
 	      }
-	      clean_chan_buffer( chan[i], true );
+	      for( int i = 0; i < 2; i++ ) {
+		clean_chan_buffer( chan[i], true );
+	      }
 	    }
 	    else if( noldpacks_ready == 2 ){
 	      if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 1, parser, combfile );
 	      for(int i = 0; i < 2; i ++){
-		write_chan_samples( chan[i], true, parser );
+		write_chan_samples( chan[i], true, parser, true );
 		clean_chan_buffer( chan[i], false );
 	      }
 	    }
@@ -427,9 +457,10 @@ int main(int argc, char **argv)
 
       }
     }
-
+    printf("Oldhpos BEFORE subtraction:\t%li\n", parser->oldhpos);
     parser->hprediction -= parser->bufrem;
-
+    parser->oldhpos -= parser->bufrem;
+    printf("Oldhpos AFTER subtraction:\t%li\n", parser->oldhpos);
     i++;
 
   }
@@ -444,19 +475,19 @@ int main(int argc, char **argv)
   free(tcp_hdr);
   if( parser->do_chans ){
     for(int i = 0; i < parser->nchans; i++ ){
-      if( ( parser->do_chans == 2 ) || ( parser->do_chans == 3 ) ){ //open files for chandata
-	free( chan[i]->outfile );
-      }	
+      /* if( ( parser->do_chans == 2 ) || ( parser->do_chans == 3 ) ){ //open files for chandata */
+      /* 	free( chan[i]->outfile ); */
+      /* }	 */
       //      free_chan( chan[i] );
       free( chan[i] );
     }
     //chan buffs
-    for(int i = 0; i < parser->nchans; i++){
-      free ( chanbuff[i] );
-      if( chan[i]->is_asynchr ){
-	free ( chantimestamps[i] );
-      }
-    }
+    /* for(int i = 0; i < parser->nchans; i++){ */
+    /*   free ( chanbuff[i] ); */
+    /*   if( chan[i]->is_asynchr ){ */
+    /* 	free ( chantimestamps[i] ); */
+    /*   } */
+    /* } */
     
     
     if( parser->do_chans == 3){ //doing join_upper10_lower6

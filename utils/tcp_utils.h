@@ -149,13 +149,15 @@ struct dewe_chan {
   int32_t oldnumtbytes;
   int32_t oldtbytes_received;
 
-  char * tstamps_addr;
+  char *tstamps_addr;
   int32_t numtbytes;
   int32_t tbytes_received;
   
 
   char outfname[128];
   FILE *outfile;
+  char ts_fname[128];
+  FILE *ts_file;
   int packs_tofile;
 
 };
@@ -181,7 +183,7 @@ int post_strip(struct tcp_parser *, char *, struct tcp_header *);
 
 //chan routines
 int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *, bool);
-int write_chan_samples(struct dewe_chan *, int, struct tcp_parser * );
+int write_chan_samples(struct dewe_chan *, int, struct tcp_parser *, bool );
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
 int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, FILE *);
