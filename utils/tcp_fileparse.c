@@ -251,10 +251,10 @@ int main(int argc, char **argv)
 
   //Start looping through file
   printf("Parsing TCP data file %s...\n",filename);
-  running = true;
-  int i = 0;
   bufsz = max_bufsz;
+  int i = 0;
   int count = 0;
+  running = true;
   while( ( bufcount = fread(buff, 1, bufsz, datafile) ) > 0 && running ) {
     
     printf("\n***\nBuffer #%i\n***\n",i+1);
@@ -424,13 +424,6 @@ int main(int argc, char **argv)
 	}	
       } //end do_chans
     
-      /* if( parser ->do_chans ){                //clean up chans, reset buffs if possible */
-      /* 	for(int i = 0; i < parser->nchans; i++){ */
-      /* 	  print_chan_info( chan[i] ); */
-      /* 	  clean_chan_buffer( chan[i] ); */
-      /* 	} */
-      /* } */
-
       update_end_of_loop(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
       
     } //end of current buffer
@@ -443,11 +436,15 @@ int main(int argc, char **argv)
 
       parser->deltotal += parser->delbytes;
       printf("Killed %li bytes so far\n",parser->deltotal);
-      if( parser-> strip_packet ==2 ) { printf("Writing %li bytes to %s\n",parser->bufrem, parser->strip_fname); }
+      if( parser-> strip_packet == 2 ) { 
+
+}
 
       if( parser->strip_packet == 2){//Up the ante
 
-    	count = fwrite(buff, 1, parser->bufrem, parser->stripfile);
+	printf("Writing %li bytes to %s\n",parser->bufrem, parser->strip_fname);     	
+
+	count = fwrite(buff, 1, parser->bufrem, parser->stripfile);
     	if( count == 0){
     	  printf("Gerrorg writing to %s\n",parser->strip_fname);
     	}
