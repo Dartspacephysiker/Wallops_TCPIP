@@ -186,9 +186,9 @@ struct dewe_chan {
   int32_t tbytes_received;
   
 
-  char outfname[128];
+  char outfname[256];
   FILE *outfile;
-  char ts_fname[128];
+  char ts_fname[256];
   FILE *ts_file;
   int packs_tofile;
 
@@ -219,8 +219,10 @@ int write_chan_samples(struct dewe_chan *, int, struct tcp_parser *, bool );
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
 int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, FILE *);
+int combine_and_write_chandata_buff(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *,  uint16_t *, int *);
 int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
+uint16_t join_upper10_lower6_p(uint16_t *, uint16_t *, bool from_network);
 int clean_chan_buffer(struct dewe_chan *, char );
 
 //end of loop routines

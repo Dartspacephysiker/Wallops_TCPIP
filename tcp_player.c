@@ -347,6 +347,7 @@ void *tcp_player_data_pt(void *threadarg) {
   struct dewe_chan *chan[MAX_NUMCHANS];
   char *chanbuff[MAX_NUMCHANS];
   char *chantimestamps[MAX_NUMCHANS];
+  uint16_t *combbuff;
   char combfname[] = "combinedchans";
   //  FILE *combfile; //File for combining upper 10, lower 6 bits of two different channels
                   //to accommodate the strange 10-bit TM data at Wallops
@@ -355,7 +356,7 @@ void *tcp_player_data_pt(void *threadarg) {
   /**************************************/
 
   char *buff;
-  long int count = 0, bufcount = 0, ret = 0;
+  long int count = 0, bufcount = 0; //, ret = 0;
   long long unsigned int i = 0;
   long long unsigned int frames, wcount;
   //  void *hptr; //pointer to header
@@ -425,18 +426,19 @@ void *tcp_player_data_pt(void *threadarg) {
   }
   parser->tailsz = STARTSTR_SZ;
   parser->oldhpos = -(parser->hdrsz + parser->tailsz); //Needs to be initialized thusly so that 
-  parser->do_predict = false;                           //parse_tcp_header doesn't complain that 
+  parser->do_predict = true;                           //parse_tcp_header doesn't complain that 
   parser->isfile = false;                              //the first header isn't where predicted
   parser->verbose = arg.o.verbose;                              
 
-  if( arg.o.runmode == 4 || arg.o.runmode == 5 ){
+  //  if( arg.o.runmode == 4 || arg.o.runmode == 5 ){
+  if( arg.o.runmode > 0 ){
 
     //Strip packet modes
     if( arg.o.runmode <= 2 ){ 
       parser->strip_packet = arg.o.runmode;
       parser->strip_fname = malloc(sizeof(char) * 128);
       parser->strip_fname = "-stripped";
-      strcat( ostr, parser->strip_fname );
+      strncat( ostr, parser->strip_fname, 16 );
       //    sprintf(parser->strip_fname,"stripped-%s",filename);
       parser->oldt_in_this_buff = 0;
       parser->t_in_this_buff = 0;
@@ -472,10 +474,7 @@ void *tcp_player_data_pt(void *threadarg) {
       chan[i] = chan_init( i, 3, true, false); //channel num, data type 3 (16-bit unsigned int), async, not singleval
 
       if( ( parser->do_chans == 2 ) || ( parser->do_chans == 3 ) ){ //open files for chandata
-	//	sprintf(chan[i]->outfname,"chan%i.data",i);
-	/* sprintf(chan[i]->outfname, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u-CH%i.data", arg.o.outdir, arg.o.prefix, */
-	/* 	ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec, arg.port,chan[i]->num); */
-	sprintf(chan[i]->outfname, "%s-CH%i.data", ostr, chan[i]->num);
+	snprintf(chan[i]->outfname, 256, "%s-CH%i.data", ostr, chan[i]->num);
 	chan[i]->outfile = fopen(chan[i]->outfname,"w");
 	if (chan[i]->outfile == NULL) {
 	  fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->outfname, chan[i]->num );
@@ -493,7 +492,7 @@ void *tcp_player_data_pt(void *threadarg) {
 	  /* sprintf(chan[i]->ts_fname, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u-CH%i_tstamps.data", arg.o.outdir,  */
 	  /* 	  arg.o.prefix,  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec,  */
 	  /* 	  arg.port,chan[i]->num); */
-	  sprintf(chan[i]->ts_fname, "%s-CH%i_tstamps.data", ostr, chan[i]->num );
+	  snprintf(chan[i]->ts_fname, 256, "%s-CH%i_tstamps.data", ostr, chan[i]->num );
 	  chan[i]->ts_file = fopen(chan[i]->ts_fname,"w");
 	  if (chan[i]->ts_file == NULL) {
 	    fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->ts_fname, chan[i]->num );
@@ -522,7 +521,9 @@ void *tcp_player_data_pt(void *threadarg) {
       }
     }
     if( parser->do_chans == 3){ //doing join_upper10_lower6
-      strcat( ostr, combfname ); 
+      //      combbuff = malloc( MAXNUMSAMPS * 2 );
+      combbuff = calloc( MAXNUMSAMPS, 2 );
+      strncat( ostr, combfname, 16 ); 
       /* combfile = fopen(combfname,"w"); */
       /* if (combfile == NULL) { */
       /* 	fprintf(stderr,"Gerrorg. Couldn't open %s.\n", combfname ); */
@@ -537,8 +538,8 @@ void *tcp_player_data_pt(void *threadarg) {
   }  
 
   //outfile setup
-  strcat( ostr, ".data" ); //and finally...
-  ofile = fopen(ostr, "a");
+  strncat( ostr, ".data", 5 ); //and finally...
+  ofile = fopen(ostr, "a+");
   if (ofile == NULL) {
     fprintf(stderr, "Failed to open output file %s.\n", ostr);
     arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval);
@@ -609,7 +610,8 @@ void *tcp_player_data_pt(void *threadarg) {
       
 
     if( arg.o.verbose ) printf("\n***\nBuffer #%lli\n***\n",i++);
-
+    if( arg.o.verbose ) printf("\n***Received #%li bytes***\n",bufcount);
+    
     parser->bufrem = bufcount;
     parser->bufpos = 0;
     parser->delbytes = 0;
@@ -620,11 +622,13 @@ void *tcp_player_data_pt(void *threadarg) {
       update_after_parse_header(parser, buff, tcp_hdr);       //new hpos, bufpos, packetpos, if applicable 
 
       if( parser->parse_ok ){
-	if( arg.o.verbose ){
+
+	//	if( ( parser->numpackets % imod ) == 0 ) {
 	  printf("*****Packet #%u*****\n",parser->numpackets);
 	  print_tcp_header(tcp_hdr);
-	  //	if( arg.o.debug ) print_raw_tcp_header(tcp_hdr);
-	}
+	  //	}
+	if( arg.o.debug ) print_raw_tcp_header(tcp_hdr);
+	
 	//Current header not where predicted?
 	if( parser->do_predict) {
 	  
@@ -724,16 +728,26 @@ void *tcp_player_data_pt(void *threadarg) {
 	      printf("Chan %i new packet ready to combine: %i\n", i, chan[i]->pack_ready);
 	    }
 	  }
-	  if( parser-> do_chans >= 2 ){
+	  if( parser->do_chans >= 2 ){
+	    uint16_t *cbuff = combbuff; //use this because combine_and_write_chandata_buff increments cbuff pointer
+	    int count = 0;
 	    if( npacks_ready == 2 ) {
 	      
-	      if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 0, parser, ofile );
+	      if( parser->do_chans == 3 ){
+		printf("BEFORE new cbuff %llu = %p\n", i, cbuff);
+		combine_and_write_chandata_buff( chan[0], chan[1], 0, parser, cbuff, &count );
+		printf("AFTER new cbuff %llu = %p\n", i, cbuff);
+	      }
 	      for(int i = 0; i < 2; i ++){
 		write_chan_samples( chan[i], false, parser, true );
 	      }
-
+	      
 	      if( noldpacks_ready == 2 ){
-		if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 1, parser, ofile );
+		if( parser->do_chans == 3 ){
+		  printf("BEFORE oldnew cbuff %llu = %p\n", i, cbuff);
+		  combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, cbuff, &count );
+		  printf("AFTER oldnew cbuff %llu = %p\n", i, cbuff);
+		}
 		for(int i = 0; i < 2; i ++){
 		  write_chan_samples( chan[i], true, parser, true );
 		}
@@ -743,7 +757,9 @@ void *tcp_player_data_pt(void *threadarg) {
 	      }
 	    }
 	    else if( noldpacks_ready == 2 ){
-	      if( parser->do_chans == 3 )combine_and_write_chandata( chan[0], chan[1], 1, parser, ofile );
+	      if( parser->do_chans == 3 ){
+		combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, cbuff, &count ); 
+	      }
 	      for(int i = 0; i < 2; i ++){
 		write_chan_samples( chan[i], true, parser, true );
 		clean_chan_buffer( chan[i], false );
@@ -752,6 +768,15 @@ void *tcp_player_data_pt(void *threadarg) {
 	    else {
 	      printf ("Not all channels are prepared to do data combination!\n");
 	    }
+	    if( parser->do_chans == 3 && count > 0 ){ //write all data out
+	      fwrite(combbuff, 2, count, ofile);
+	      if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
+	      if( arg.o.verbose ) printf("Writing %i combined samples to file\n", count);
+	      if( arg.o.debug ) {
+		printf("tcp_player.c [tcp_player_data_pt()] combbuff: %p\n", combbuff);
+		printf("tcp_player.c [tcp_player_data_pt()] cbuff: %p\n", cbuff);
+	      }
+	    } 
 	  } //end combine channel data
 	} //end write chan data
 	else { //just clean up, nothing to write
@@ -777,37 +802,33 @@ void *tcp_player_data_pt(void *threadarg) {
     }
     parser->hprediction -= parser->bufrem;
 
-    printf("Writing %li bytes to %s\n",parser->bufrem, ostr);
-    
-    count = fwrite(buff, 1, parser->bufrem, ofile);
-    if( count == 0){
-      printf("Gerrorg writing to %s\n", ostr);
-      *arg.running = false; 
-      arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
-    }
-    parser->wcount += count;
-    
-    //    ret = fwrite(buff, sizeof(char), parser->bufrem, ofile);
-    /* if( ret < parser->bufrem ) */
-    /*   { */
-    /* 	printf("File write failed.\n"); */
-    /* 	*arg.running = false; */
-    /* 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval); */
-    /*   } */
-    /* parser->wcount += ret; */
-  
-    gettimeofday(&then, NULL);
+    //    printf("Writing %li bytes to %s\n",parser->bufrem, ostr);
+    printf("Writing %li bytes\n", parser->bufrem );
 
-    if(i % imod == 0)
-      {
-	printf("Received %li bytes\n", ret);
+    if( arg.o.runmode != 6 ){
+      count = fwrite(buff, 1, parser->bufrem, ofile);
+      if( count == 0){
+	printf("Gerrorg writing to %s\n", ostr);
+	*arg.running = false; 
+	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
+      parser->wcount += count;
+    }
+    /* else { //We're in combine chan mode */
+    /*   //      count = fwrite(combbuff, 1,  */
+    /*   printf("kick it\n"); //fseek(ofile, -numread, SEEK_END); */
+    /* } */
+
+    //write rtd stuff
+    if( arg.o.dt > 0 ) {
+      fifo_write( fifo, buff, parser->bufrem );
+    }
+    
+    gettimeofday(&then, NULL);
 
     // Copy into RTD memory if we're running the display
     if (arg.o.dt > 0) {
       
-      fifo_write( fifo, buff, parser->bufrem );
-
       if( !arg.o.digitizer_data ) {
 	if( fifo_avail(fifo) > 2*rtdbytes ) {
 	  if( (fifo_loc = fifo_search(fifo, fifo_srch, 2*rtdbytes) ) != EXIT_FAILURE ) {
@@ -854,13 +875,14 @@ void *tcp_player_data_pt(void *threadarg) {
   gettimeofday(&now, NULL);
     
   /* Close the file */
-  
   if ( (arg.retval = fclose(ofile) ) != 0) {
     printe("Couldn't close file %s!\n", ostr);
   }
+
+  //print stats
+  print_stats(parser);
     
   telapsed = now.tv_sec-start.tv_sec + 1E-6*(now.tv_usec-start.tv_usec);
-    
   printf("Read %lli bytes from port %u in %.4f s: %.4f KBps.\n", parser->wcount, arg.port, telapsed, (parser->wcount/1024.0)/telapsed);
 
   printf("OK!\n");

@@ -9,9 +9,6 @@
 #ifndef EPP_ACQ_H_
 #define EPP_ACQ_H_
 
-#define CF_HEADER_SIZE 200 // Colonel Frame header size
-#define TIME_OFFSET 946684800 // Time to 2000.1.1 from Epoch
-
 #include "tcp_player_struct.h"
 
 void tcp_play(struct player_opt);

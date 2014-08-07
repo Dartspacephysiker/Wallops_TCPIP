@@ -312,7 +312,7 @@ int print_raw_tcp_header(struct tcp_header *th){
 
   int i = 0;
   int j = 0;
-  int rowmod = 20;
+  int rowmod = 16;
 
   //  size_t hdrsz = sizeof(struct tcp_header);
   int hdrsz = sizeof(th->start_str) + sizeof(th->pack_sz) + sizeof(th->pack_type) + 
@@ -944,6 +944,90 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
   return EXIT_SUCCESS;
 }
 
+//NOTE: THIS VARIATION ON THE ABOVE WRITES NEW SAMPLES TO A BUFFER INSTEAD OF A FILE
+// This is done so that both rtd and an output file can use them
+int combine_and_write_chandata_buff( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser *p, uint16_t *buff, int *pcount){
+
+  if( DEBUG ) {
+    printf("tcp_utils.c [combine_and_write_chandata()] Combining CH%i and CH%i\n", c1->num, c2->num);
+    printf("tcp_utils.c [combine_and_write_chandata()] Old data: %i\n", old);
+  }
+  uint16_t *c1_buffstart;
+  uint16_t *c2_buffstart;
+  long int numsamps;
+  size_t dsize;
+  
+  if( old == 0 ){
+    
+    if( c1->numsamps == 0 || c2->numsamps == 0 ) {
+      if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()] Doing new data with zero samps...poor logic\n");
+      return EXIT_FAILURE;
+    }
+    else if( c1->numsamps != c2->numsamps ){
+      printf("Unequal number of samples for each channel!\n");
+      printf("Channel %i:\t%i\n", c1->num, c1->numsamps);
+      printf("Channel %i:\t%i\n", c2->num, c2->numsamps);
+      return EXIT_FAILURE;
+    }
+    numsamps = c1->numsamps;
+    
+    c1_buffstart = (uint16_t *)c1->packaddr;
+    c2_buffstart = (uint16_t *)c2->packaddr;
+  }
+  else {
+    
+    if( c1->oldnumsamps == 0 || c2->oldnumsamps == 0 ){
+      if( DEBUG ) printf("tcp_utils.c [combine_and_write_chandata()] Doing old data with zero samps...poor logic\n");
+      return EXIT_FAILURE;
+    }
+    else if( c1->oldnumsamps != c2->oldnumsamps ){
+      printf("Unequal number of old samples for each channel!\n");
+      printf("(old)Channel %i:\t%i\n", c1->num, c1->oldnumsamps);
+      printf("(old)Channel %i:\t%i\n", c2->num, c2->oldnumsamps);
+      return EXIT_FAILURE;
+    }
+    numsamps = c1->oldnumsamps;
+    
+    c1_buffstart = (uint16_t *)c1->oldpackaddr;
+    c2_buffstart = (uint16_t *)c2->oldpackaddr;
+  }
+  
+  if( c1->dsize != c2->dsize ){
+    printf("Unequal data sizes for each channel!\n");
+    printf("Channel %i datasize:\t%i\n", c1->num, c1->dsize);
+    printf("Channel %i datasize:\t%i\n", c2->num, c2->dsize);
+    return EXIT_FAILURE;
+  }
+  dsize = c1->dsize;
+  
+  if( ( c1_buffstart != NULL ) && ( c2_buffstart != NULL ) ){
+    /* int samp = numsamps; */
+    /* //    buff += *pcount; //increment pointer by number of samples already recorded */
+    /* while( samp-- > 0 ){  */
+    /*   *buff++ = join_upper10_lower6_p( *c1_buffstart++, c2_buffstart++, 0); */
+    /* } */
+    int samp = 0;
+    //    buff += *pcount; //increment pointer by number of samples already recorded
+    while( samp++ < numsamps ){ 
+      buff[samp] = join_upper10_lower6_p( c1_buffstart + samp, c2_buffstart + samp, 0);
+    }
+
+  }
+  else {
+    printf("tcp_utils.c [combine_and_write_chandata()] You just tried to slip me a null pointer! You code like a graduate student.\n");
+    return EXIT_FAILURE;
+  }
+
+  if( DEF_VERBOSE ) printf("Combined and wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
+  p->npacks_combined += 1;
+
+  *pcount += numsamps;
+
+  return EXIT_SUCCESS;
+}
+
+
+
 //NOT FINISHED! Position reporting isn't clear yet
 int print_chan_info(struct dewe_chan *c){
   
@@ -987,8 +1071,8 @@ int16_t join_chan_bits(char a, char b)
 //and the 6 lower bits we're gettin from the other. Presumably they both come through as 
 //16-bit data, and if they're in network order we need to take stock of that
 //If so, use ntohs(var) ("network to host short"), assuming sizeof(short) >= 2. 
-uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
 
+uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
   if(from_network){
     //just in case lower has some garbage bits set above the lowest 6
     //lower &= ~(0b0000001111111111);
@@ -1007,6 +1091,27 @@ uint16_t join_upper10_lower6(uint16_t upper, uint16_t lower, bool from_network){
       return ( upper << 6 ) + ( lower >> 4 );
   }
 }
+
+uint16_t join_upper10_lower6_p(uint16_t *upper, uint16_t *lower, bool from_network){
+  if(from_network){
+    //just in case lower has some garbage bits set above the lowest 6
+    //lower &= ~(0b0000001111111111);
+    return ( ntohs(*upper) << 6) ^ ntohs(*lower);
+  } 
+  else {
+    //just in case lower has some garbage bits set above the lowest 6
+    //    lower &= ~(0b1111111111 << 6);
+    /* if( DEBUG ) { */
+      /* printf("ushort upper = 0X%hX\n", upper); */
+      /* printf("ushort lower = 0X%hX\n", lower); */
+    /*   printf("ushort upper << 6 = 0X%hX\n",(upper << 6)); */
+    /*   printf("lower &= ~(0b1111111111 << 6): 0X%hX\n", ( lower &= ~( 0b1111111111 << 6 ) ) );  */
+    /*   printf("return of joinupper10_lower6(upper, lower, 0): 0X%hX\n", (upper << 10 ) ^ lower ); */
+    /* } */
+      return ( *upper << 6 ) + ( *lower >> 4 );
+  }
+}
+
 //Here's some code to test out the above functions:
   /* //test out this newfangled combine bit thing */
   /* unsigned char a = 0b11111111; */
