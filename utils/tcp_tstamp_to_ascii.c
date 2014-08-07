@@ -116,17 +116,17 @@ int main( int argc, char **argv ){
     while( fread( &tstamp, ts_dsize, 1, ts_infile ) > 0 ){
       fprintf( ofile, "%li\t%.7f\t%.7f\n", tcount, tstamp, tstamp-oldtstamp );
       oldtstamp = tstamp;
-      oldatum = datum;
       tcount ++;
     }
   }
   else {
     fprintf( ofile, "#\tsample\tsampdiff\ttstamp\tsdiff\n");
-    fprintf( ofile, "%li\t%"PRIu16"\t----\t%.7f\t----\n", tcount, oldatum, oldtstamp );
+    fprintf( ofile, "%li\t%"PRIi16"\t----\t%.7f\t----\n", tcount, oldatum, oldtstamp );
     while( fread( &tstamp, ts_dsize, 1, ts_infile ) > 0 ){ 
       fread( &datum, dsize, 1, d_infile );
-      fprintf( ofile, "%li\t%"PRIu16"\t%"PRIu16"\t\t%.7f\t%.7f\n", tcount, datum, datum - oldatum, tstamp, tstamp-oldtstamp );
+      fprintf( ofile, "%li\t%"PRIu16"\t%"PRIi16"\t\t%.7f\t%.7f\n", tcount, datum, ((int16_t)datum - (int16_t)oldatum), tstamp, tstamp-oldtstamp );
       oldtstamp = tstamp;
+      oldatum = datum;
       tcount ++;
     }
   }
