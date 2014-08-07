@@ -456,17 +456,6 @@ void *tcp_player_data_pt(void *threadarg) {
     }
   }
 
-  //If stripping data, set up file for stripped data
-  /* if(parser->strip_packet == 2){ */
-  /*   printf("stripfname: %s\n",parser->strip_fname); */
-  /*   /\* parser->stripfile = fopen(parser->strip_fname,"w"); *\/ */
-  /*   /\* printf("Stripfile: %p\n",parser->stripfile); *\/ */
-  /*   /\* if (parser->stripfile == NULL) { *\/ */
-  /*   /\*   fprintf(stderr,"Gerrorg. Couldn't open stripfile %s.\n",parser->strip_fname); *\/ */
-  /*   /\*   return(EXIT_FAILURE); *\/ */
-  /*   /\* } *\/ */
-  /* } */
-
   //tcp chan stuff
   if( parser->do_chans ){
     for (int i = 0; i < parser->nchans; i ++) {
@@ -521,20 +510,10 @@ void *tcp_player_data_pt(void *threadarg) {
       }
     }
     if( parser->do_chans == 3){ //doing join_upper10_lower6
-      //      combbuff = malloc( MAXNUMSAMPS * 2 );
       combbuff = calloc( MAXNUMSAMPS, 2 );
       strncat( ostr, combfname, 16 ); 
-      /* combfile = fopen(combfname,"w"); */
-      /* if (combfile == NULL) { */
-      /* 	fprintf(stderr,"Gerrorg. Couldn't open %s.\n", combfname ); */
-      /* 	    arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval); */
-      /* 	    //	    return(EXIT_FAILURE); */
-      /* } */
       if( arg.o.verbose ){ printf("Combined data filename: %s\n", ostr); }
     }
-    /* else { */
-    /*   combfile = NULL; */
-    /* }	 */
   }  
 
   //outfile setup
@@ -853,7 +832,10 @@ void *tcp_player_data_pt(void *threadarg) {
       } 
       else { //it IS digitizer data
 	if( fifo_avail(fifo) > rtdbytes ) {
+	  //read it and junk it
 	  fifo_read(fifo_outbytes, fifo, rtdbytes);
+	  fifo_kill(fifo, rtdbytes);
+
 	  pthread_mutex_lock(arg.rlock);
 	  if (arg.o.debug) {
 	    printf("Port %i rtd moving rtdbytes %i from cfb %p to rtdb %p with %li avail.\n",
