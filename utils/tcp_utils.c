@@ -1021,7 +1021,7 @@ int combine_and_write_chandata_buff( struct dewe_chan *c1 , struct dewe_chan *c2
   if( DEF_VERBOSE ) printf("Combined and wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
   p->npacks_combined += 1;
 
-  *pcount += numsamps;
+  *pcount = numsamps;
 
   return EXIT_SUCCESS;
 }
