@@ -25,18 +25,18 @@
 
 #define DEF_DIGITDATA false //Digitizer data
 #define DEF_RTDSIZE 65536 // RTD Output size, words
-#define DEF_RTDFILE "/tmp/rtd/rtd.data"
+#define DEF_RTDFILE "/tmp/rtd/rtd_tcp.data"
 #define DEF_RTD_DT 0 // No RTD by default
 #define DEF_RTDAVG 12
 
 #define DEF_RUNMODE 0
-
-//#define DEF_TIMEOUT 1000 //timeout of 1 second MAX!
 
 #define MAXPORTS 4
 
 //channel defaults
 #define DEF_NUMCHANS 2
 #define MAX_NUMCHANS 4
+
+//#defin MAXNUMSAMPS
 
 #endif /* DEFAULTS_H_ */

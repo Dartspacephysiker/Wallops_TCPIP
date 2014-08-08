@@ -27,7 +27,7 @@ int fifo_kill(struct simple_fifo *, long int);
 void fifo_destroy(struct simple_fifo *);
 long int fifo_avail(struct simple_fifo *);
 
-long int fifo_search(struct simple_fifo *, char *, size_t);
+long int fifo_search(struct simple_fifo *, size_t, char *, size_t );
 long int fifo_skip(char *, size_t, long int, long int, size_t, struct simple_fifo *);
 
 #endif /* SIMPLE_FIFO_H_ */

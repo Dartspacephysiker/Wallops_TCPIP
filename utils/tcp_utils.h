@@ -14,7 +14,7 @@
 #include <math.h>
 
 #define STARTSTR_SZ 8
-#define MAXNUMSAMPS 30000 //should be more than enough
+#define MAXNUMSAMPS 60000 //should be more than enough
 
 /* This one is for pulling in PCM data, the structure of which 
  * (at least for a single synchronous PCM channel coming from the DEWESoft 
@@ -219,7 +219,7 @@ int write_chan_samples(struct dewe_chan *, int, struct tcp_parser *, bool );
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
 int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, FILE *);
-int combine_and_write_chandata_buff(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *,  uint16_t *, int *);
+int combine_and_write_chandata_buff(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *,  uint16_t *, long int *);
 int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
 uint16_t join_upper10_lower6_p(uint16_t *, uint16_t *, bool from_network);

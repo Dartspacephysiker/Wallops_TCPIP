@@ -18,8 +18,8 @@
 
 #include "tcp_utils.h"
 
-#define DEBUG true
-#define DEF_VERBOSE true
+#define DEBUG false
+#define DEF_VERBOSE false
 
 #define USE_CHAN(chan) c->dtype##chan
 
@@ -423,8 +423,8 @@ int prep_for_strip(struct tcp_parser *p, char * buf_addr, struct tcp_header *th)
       
       p->t_in_this_buff = false;
 
-      printf("tcp_utils.c [prep_for_strip()] Couldn't find header, and this buffer "
-	     "does NOT contain the footer from the last header.\n");
+      if(p->verbose) printf("tcp_utils.c [prep_for_strip()] Couldn't find header, and this buffer "
+			    "does NOT contain the footer from the last header.\n");
 
     } 
     else { //what is left in the buffer DOES have a tail in it, if pack_sz isn't lying.
@@ -946,7 +946,7 @@ int combine_and_write_chandata( struct dewe_chan *c1 , struct dewe_chan *c2, int
 
 //NOTE: THIS VARIATION ON THE ABOVE WRITES NEW SAMPLES TO A BUFFER INSTEAD OF A FILE
 // This is done so that both rtd and an output file can use them
-int combine_and_write_chandata_buff( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser *p, uint16_t *buff, int *pcount){
+int combine_and_write_chandata_buff( struct dewe_chan *c1 , struct dewe_chan *c2, int old, struct tcp_parser *p, uint16_t *buff, long int *pcount){
 
   if( DEBUG ) {
     printf("tcp_utils.c [combine_and_write_chandata()] Combining CH%i and CH%i\n", c1->num, c2->num);

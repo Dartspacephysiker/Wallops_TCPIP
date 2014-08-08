@@ -117,8 +117,7 @@ void tcp_play(struct player_opt o) {
     }
     if ((fstat(rfd, &sb) == -1) || (!S_ISREG(sb.st_mode))) {
       printe("Improper rtd file.\n"); return;
-    }
-    
+    }    
     int mapsize;
     if(o.digitizer_data) {
       mapsize = o.num_ports*rtdsize + 72;
@@ -164,17 +163,6 @@ void tcp_play(struct player_opt o) {
       rtdh.prtd.byte_packing=0;
       rtdh.prtd.code_version=0.1;
     }
-/*     header.num_read = o.rtdsize*o.num_ports; */
-/*     sprintf(header.site_id,"%s","RxDSP Woot?"); */
-/*     header.hkey = 0xF00FABBA; */
-/*     header.num_channels=o.num_ports; */
-/*     header.channel_flags=0x0F; */
-/*     header.num_samples=o.rtdsize; */
-/* //!!! DOES THIS NEED TO BE CHANGED TO 960000? */
-/*     header.sample_frequency=960000; */
-/*     header.time_between_acquisitions=o.dt; */
-/*     header.byte_packing=0; */
-/*     header.code_version=0.1; */
   }
     
   /*
@@ -213,16 +201,12 @@ void tcp_play(struct player_opt o) {
 	     sizeof( struct prtd_header_info ), rtdsize, o.num_ports);
     }
   }
-  //  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_ports: %i.\n", sizeof(header), rtdsize, o.num_ports);
-
-
   /*
    * Now we sit back and update RTD data until all files quit reading.
    */
   gettimeofday(&then, NULL);
   while ((active_threads > 0) || running) {
     if (o.dt > 0) {
-
       gettimeofday(&now, NULL); // Check time
       telapsed = now.tv_sec-then.tv_sec + 1E-6*(now.tv_usec-then.tv_usec);
 
@@ -240,15 +224,9 @@ void tcp_play(struct player_opt o) {
 	  rtdh.cprtd.start_time = time(NULL);
 	  rtdh.cprtd.start_timeval = now;
 	  rtdh.cprtd.averages = o.rtdavg;
-	/* header.start_time = time(NULL); */
-	/* header.start_timeval = now; */
-	/* header.averages = o.rtdavg; */
 
 	  memmove(rmap, &rtdh.cprtd, sizeof(struct header_info));
 	  memmove(rmap+102, rtdout, rtdsize*o.num_ports);
-	  /* memmove(rmap, &header, sizeof(struct header_info)); */
-	  /* memmove(rmap+102, rtdout, rtdsize*o.num_ports); */
-
 	}
 	else {
 	  rtdh.prtd.start_time = time(NULL);
@@ -321,7 +299,7 @@ void *tcp_player_data_pt(void *threadarg) {
   int sin_size; // to store struct size
 
   /* For keeping track of how much gets sent */
-  int imod = 10;
+  //  int imod = 10;
 
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
@@ -426,7 +404,7 @@ void *tcp_player_data_pt(void *threadarg) {
   }
   parser->tailsz = STARTSTR_SZ;
   parser->oldhpos = -(parser->hdrsz + parser->tailsz); //Needs to be initialized thusly so that 
-  parser->do_predict = true;                           //parse_tcp_header doesn't complain that 
+  parser->do_predict = false;                           //parse_tcp_header doesn't complain that 
   parser->isfile = false;                              //the first header isn't where predicted
   parser->verbose = arg.o.verbose;                              
 
@@ -582,9 +560,11 @@ void *tcp_player_data_pt(void *threadarg) {
    * Main data loop
    */
   int bufsz = arg.o.revbufsize;
-  while ( ( bufcount = recv(nsockfd, buff, bufsz, 0) ) > 0 && *arg.running ) {
+  while ( *arg.running ) {
     //    if (arg.o.debug) { printf("Port %u read data.\n", arg.port); fflush(stdout); }
     //    memset(buff, 0, arg.o.revbufsize);    
+
+    bufcount = recv(nsockfd, buff, bufsz, 0);
     if(arg.o.sleeptime) usleep(arg.o.sleeptime);
       
 
@@ -709,7 +689,7 @@ void *tcp_player_data_pt(void *threadarg) {
 	  }
 	  if( parser->do_chans >= 2 ){
 	    uint16_t *cbuff = combbuff; //use this because combine_and_write_chandata_buff increments cbuff pointer
-	    int count = 0;
+	    count = 0;
 	    if( npacks_ready == 2 ) {
 	      
 	      if( parser->do_chans == 3 ){
@@ -750,7 +730,7 @@ void *tcp_player_data_pt(void *threadarg) {
 	    if( parser->do_chans == 3 && count > 0 ){ //write all data out
 	      fwrite(combbuff, 2, count, ofile);
 	      if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
-	      if( arg.o.verbose ) printf("Writing %i combined samples to file\n", count);
+	      if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
 	      if( arg.o.debug ) {
 		printf("tcp_player.c [tcp_player_data_pt()] combbuff: %p\n", combbuff);
 		printf("tcp_player.c [tcp_player_data_pt()] cbuff: %p\n", cbuff);
@@ -782,10 +762,10 @@ void *tcp_player_data_pt(void *threadarg) {
     parser->hprediction -= parser->bufrem;
 
     //    printf("Writing %li bytes to %s\n",parser->bufrem, ostr);
-    printf("Writing %li bytes\n", parser->bufrem );
-
     if( arg.o.runmode != 6 ){
+      printf("Writing %li bytes\n", parser->bufrem );
       count = fwrite(buff, 1, parser->bufrem, ofile);
+      if( arg.o.dt > 0 ) fifo_write( fifo, buff, parser->bufrem );
       if( count == 0){
 	printf("Gerrorg writing to %s\n", ostr);
 	*arg.running = false; 
@@ -799,10 +779,6 @@ void *tcp_player_data_pt(void *threadarg) {
     /* } */
 
     //write rtd stuff
-    if( arg.o.dt > 0 ) {
-      fifo_write( fifo, buff, parser->bufrem );
-    }
-    
     gettimeofday(&then, NULL);
 
     // Copy into RTD memory if we're running the display
@@ -810,7 +786,7 @@ void *tcp_player_data_pt(void *threadarg) {
       
       if( !arg.o.digitizer_data ) {
 	if( fifo_avail(fifo) > 2*rtdbytes ) {
-	  if( (fifo_loc = fifo_search(fifo, fifo_srch, 2*rtdbytes) ) != EXIT_FAILURE ) {
+	  if( (fifo_loc = fifo_search(fifo, 2*rtdbytes, fifo_srch, 16 ) ) != EXIT_FAILURE ) {
 	    
 	    fifo_kill(fifo, fifo_loc);
 	    fifo_read(fifo_outbytes, fifo, rtdbytes);
@@ -831,10 +807,9 @@ void *tcp_player_data_pt(void *threadarg) {
 	} 
       } 
       else { //it IS digitizer data
-	if( fifo_avail(fifo) > rtdbytes ) {
-	  //read it and junk it
+	if( fifo_avail(fifo) >= rtdbytes ) {
+	  //read it
 	  fifo_read(fifo_outbytes, fifo, rtdbytes);
-	  fifo_kill(fifo, rtdbytes);
 
 	  pthread_mutex_lock(arg.rlock);
 	  if (arg.o.debug) {
@@ -865,7 +840,7 @@ void *tcp_player_data_pt(void *threadarg) {
   print_stats(parser);
     
   telapsed = now.tv_sec-start.tv_sec + 1E-6*(now.tv_usec-start.tv_usec);
-  printf("Read %lli bytes from port %u in %.4f s: %.4f KBps.\n", parser->wcount, arg.port, telapsed, (parser->wcount/1024.0)/telapsed);
+  printf("Read %li bytes from port %u in %.4f s: %.4f KBps.\n", parser->wcount, arg.port, telapsed, (parser->wcount/1024.0)/telapsed);
 
   printf("OK!\n");
   close(nsockfd);

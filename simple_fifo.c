@@ -88,11 +88,11 @@ long int fifo_avail(struct simple_fifo *fifo) {
 }
 
 /*Returns the distance of the beginning of the string relative to the head of the FIFO*/
-long int fifo_search(struct simple_fifo *fifo, char *search_str, size_t search_len) {
+long int fifo_search(struct simple_fifo *fifo,  size_t search_len, char *search_str, size_t search_strlen ) {
   
   void *ret = NULL;
   
-  ret = memmem(fifo->head, search_len, search_str, strlen(search_str) );
+  ret = memmem(fifo->head, search_len, search_str, search_strlen );
 
   if(ret == NULL) {
     return EXIT_FAILURE;
