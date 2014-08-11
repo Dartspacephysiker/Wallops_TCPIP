@@ -35,7 +35,7 @@
 
 //channel defaults
 #define DEF_NUMCHANS 2
-#define MAX_NUMCHANS 4
+#define MAX_NUMCHANS 2
 
 //#defin MAXNUMSAMPS
 

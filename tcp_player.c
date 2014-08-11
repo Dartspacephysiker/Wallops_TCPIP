@@ -428,7 +428,7 @@ void *tcp_player_data_pt(void *threadarg) {
       /* 	parser->nchans = atoi(argv[4]); */
       /* } */
       /* else { */
-	parser->nchans = DEF_NUMCHANS;
+	parser->nchans = arg.o.nchan;
       /* } */
       if( arg.o.verbose ) printf("tcp_player.c [tcp_player_data_pt()] parser->nchans\t=\t%i\n",parser->nchans);
     }

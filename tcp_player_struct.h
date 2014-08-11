@@ -21,7 +21,7 @@ struct player_opt {
   int maxacq;
   unsigned int ports[MAXPORTS];
   int num_ports;
-  //  bool oldsport;
+  int nchan;
   char *prefix;
   char *outdir;
   unsigned int sleeptime;

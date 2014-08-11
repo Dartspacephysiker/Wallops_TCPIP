@@ -34,7 +34,7 @@ void init_opt(struct player_opt *o) {
   o->revbufsize = DEF_REVBUFSIZE;
   o->ports[0] = DEF_PORT;
   o->num_ports = 1;
-  //  o->oldsport = false;
+  o->nchan = DEF_NUMCHANS;
   o->prefix = DEF_PREFIX;
   o->outdir = DEF_OUTDIR;
   
@@ -57,7 +57,7 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
   char *pn;
   int c, i = 0;
   
-  while (-1 != (c = getopt(argc, argv, "A:x:p:P:o:s:gR:m:d:a:r:vVh"))) {
+  while (-1 != (c = getopt(argc, argv, "A:x:p:c:P:o:s:gR:m:d:a:r:vVh"))) {
     switch (c) {
     case 'A':
       options->revbufsize = strtoul(optarg, NULL, 0);
@@ -77,6 +77,9 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
 	options->ports[j] = ports[j];
 	options->num_ports = i+1;
       }
+      break;
+    case 'c':
+      options->nchan = strtoul(optarg, NULL, 0);
       break;
     case 'P':
       options->prefix = optarg;
@@ -119,9 +122,10 @@ int parse_opt(struct player_opt *options, int argc, char **argv) {
       printf("\t-p <#>\tPort list (see below) [%u].\n", DEF_PORT);
       printf("\t\tCan either give a single port, or a comma-separated list.\n");
       printf("\t\ti.e., \"8000\", \"5000,7000\"\n");
+      printf("\t-c <#>\tNumber of channels per port [%u]\n", DEF_NUMCHANS);
       printf("\t-P <s>\tSet output filename prefix [%s].\n", DEF_PREFIX);
       printf("\t-o <s>\tSet output directory [%s].\n", DEF_OUTDIR);
-      printf("\t-s <#>\tSet microseconds to sleep between acquisitions [Default: %u]\n", DEF_SLEEPTIME);
+      printf("\t-s <#>\tSet microseconds to sleep between acquisitions [%u]\n", DEF_SLEEPTIME);
       printf("\n");
       printf("\t-g Digitizer data (Real data, excludes search for Dartmouth headers) [Default: %i]\n", DEF_DIGITDATA);
       printf("\t-R <#>\tReal-time display output size (in words) [%i].\n", DEF_RTDSIZE);

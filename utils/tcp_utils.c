@@ -57,6 +57,7 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
   if(is_singleval){
     c->is_singleval = true;
     c->dsize = chan_data_size[7]; //double float, 64-bit, as required by DEWESoft
+    c->dsize = 8; //double float, 64-bit, as required by DEWESoft
     c->d.type7 = malloc( sizeof(double_t) );
 
     c->bufsize = chan_data_size[7];
