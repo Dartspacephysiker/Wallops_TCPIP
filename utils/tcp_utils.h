@@ -14,7 +14,7 @@
 #include <math.h>
 
 #define STARTSTR_SZ 8
-#define MAXNUMSAMPS 70000 //should be more than enough
+#define MAXNUMSAMPS 100000 //should be more than enough
 
 /* This one is for pulling in PCM data, the structure of which 
  * (at least for a single synchronous PCM channel coming from the DEWESoft 

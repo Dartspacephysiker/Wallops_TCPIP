@@ -514,46 +514,62 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
 
   //Now blast the obvious header (as well as the footer from the last buffer, if applicable)
   if( p->parse_ok ){ //Note, if !parse_ok then header_addr is NULL
+    if( th->pack_type == 0 ){
+      if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Blasting header...\n"); }
+      //if(p->verbose){     printf("tcp_utils.c [strip_tcp_packet()] bufrem is %li\n", p->bufrem); }
 
-    if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Blasting header...\n"); }
-    //if(p->verbose){     printf("tcp_utils.c [strip_tcp_packet()] bufrem is %li\n", p->bufrem); }
+      //if there is a tail nearby from the last header search, account for it here
+      if( p->oldt_in_this_buff ) {
 
-    //if there is a tail nearby from the last header search, account for it here
-    if( p->oldt_in_this_buff ) {
+	//double check, just to be safe
+	if( strncmp( (char *)((long int)p->header_addr - p->tailsz), p->tlstr, p->tailsz) == 0 ){
 
-      //double check, just to be safe
-      if( strncmp( (char *)((long int)p->header_addr - p->tailsz), p->tlstr, p->tailsz) == 0 ){
+	  p->oldtkill = true;
+	  p->oldt_in_this_buff = false;
 
-	p->oldtkill = true;
-      	p->oldt_in_this_buff = false;
-
-	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] found oldtailstring\n"); }
-	for(int i = 0; i < p->tailsz; i++){
-	  if(p->verbose){ printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]); }
+	  if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] found oldtailstring\n"); }
+	  for(int i = 0; i < p->tailsz; i++){
+	    if(p->verbose){ printf("0x%X ",((char *)((long int)p->header_addr - p->tailsz))[i]); }
+	  }
+	  if(p->verbose){ printf("\n"); }
+      
 	}
-	if(p->verbose){ printf("\n"); }
+	else {
+
+	  p->oldt_in_this_buff = true;
+
+	  if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Heard tell there was a tail here, but no sign...\n"); }
+
+	} 
       
       }
-      else {
 
-	p->oldt_in_this_buff = true;
-
-	if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Heard tell there was a tail here, but no sign...\n"); }
-
-      } 
-      
+      printf("Moving %li bytes to %p from %p\n",p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz,
+	     (void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
+	     (void *)((long int)p->header_addr + p->hdrsz));
+      //act in a devastating manner here
+      memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
+	      (void *)((long int)p->header_addr + p->hdrsz), 
+	      p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz);
+    
+      p->hkill = true;
     }
-
-    printf("Moving %li bytes to %p from %p\n",p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz,
-	   (void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
-	   (void *)((long int)p->header_addr + p->hdrsz));
-    //act in a devastating manner here
-    memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
-	    (void *)((long int)p->header_addr + p->hdrsz), 
-	    p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz);
+    /* else if( th->pack_type == 1 ){ */
+    /*   if(p->verbose){ printf("tcp_utils.c [strip_tcp_packet()] Blasting header...\n"); } */
+    /*   printf("Packet type 1! Moving %li bytes to %p from %p\n",p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz, */
+    /* 	     (void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz), */
+    /* 	     (void *)((long int)p->header_addr + p->hdrsz)); */
+    /*   //THE FOLLOWING IS NOT STABLE AS WRITTEN! I NEED TO FIGURE OUT HOW TO BOTH OVERWRITE THE ENTIRE CONTENTS OF A TYPE-1 PACKET, AND APPROPRIATELY INFORM BUFPOS AND ANYONE ELSE */
+    /*   memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz), */
+    /* 	      (void *)((long int)p->header_addr + p->hdrsz +),  */
+    /* 	      p->hdrsz + th->pack_sz ); */
     
-    p->hkill = true;
-    
+    /*   p->hkill = true; */
+      
+    /* } */
+    else {
+      printf("What is this garbage?\n");
+    }
   }
    
   p->oldt_in_this_buff = oldt_in_next_buff;
