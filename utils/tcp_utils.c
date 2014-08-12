@@ -544,14 +544,21 @@ int strip_tcp_packet(struct tcp_parser *p, char *buf_addr, struct tcp_header *th
       
       }
 
-      printf("Moving %li bytes to %p from %p\n",p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz,
+      //act in a devastating manner here
+      long int movelen = p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz;
+      if( movelen > 0 ) {
+      printf("Moving %li bytes to %p from %p\n", movelen,
 	     (void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
 	     (void *)((long int)p->header_addr + p->hdrsz));
-      //act in a devastating manner here
-      memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
-	      (void *)((long int)p->header_addr + p->hdrsz), 
-	      p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz);
-    
+
+	memmove((void *)((long int)p->header_addr - (int)p->oldtkill * p->tailsz),
+		(void *)((long int)p->header_addr + p->hdrsz), 
+		p->bufrem - p->hpos - p->hdrsz - (int)p->tkill * p->tailsz);
+      }
+      else{
+	printf("Strip_packet tried to move zero or less bytes!!\n");
+      }
+
       p->hkill = true;
     }
     /* else if( th->pack_type == 1 ){ */
