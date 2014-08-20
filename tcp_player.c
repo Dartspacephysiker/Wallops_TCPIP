@@ -309,18 +309,6 @@ void *tcp_player_data_pt(void *threadarg) {
   struct tcp_parser *parser;
   char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-
-  /* int tcp_hc = 0; //tcp header count */
-  /* int tcp_tc = 0; //tcp footer count */
-  /* int tcp_hdrsz = 40; */
-  /* int tcp_tailsz = 8; */
-  /* void *oldheader_loc; */
-  /* void *header_loc; */
-  /* void *tail_loc; */
-  /* long int tail_diff = 0; */
-  /* long int header_diff = 0; */
-  /* long int keep; */
-
   //Channel stuff
   struct dewe_chan *chan[MAX_NUMCHANS];
   char *chanbuff[MAX_NUMCHANS];
@@ -338,12 +326,6 @@ void *tcp_player_data_pt(void *threadarg) {
   long long unsigned int i = 0;
   long long unsigned int frames, wcount;
   //  void *hptr; //pointer to header
-
-  /* printf("Here comes packet start string:\n"); */
-  /* for (int j = 0; j < 8; j++) { */
-  /*   printf("%x",tcp_hdr.start_str[j]); */
-
-  /* } */
 
   //time, rtd stuff
   int rtdbytes;
@@ -786,7 +768,7 @@ void *tcp_player_data_pt(void *threadarg) {
       printf("Writing %li bytes\n", parser->bufrem );
       count = fwrite(buff, 1, parser->bufrem, ofile);
       if( arg.o.dt > 0 ) fifo_write( fifo, buff, parser->bufrem );
-      if( count == 0){
+      if( count == 0 && parser->bufrem != 0 ){
 	printf("Gerrorg writing to %s\n", ostr);
 	*arg.running = false; 
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);

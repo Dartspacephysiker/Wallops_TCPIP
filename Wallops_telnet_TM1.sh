@@ -3,15 +3,15 @@
 
 TM1="192.168.2.201"
 TM1PORT="8999"
-PORT=${3:-5010}
+PORT=${4:-5010}
 SLEEP="2"
-ACQTIME=${4:-45}
+ACQTIME=${3:-45}
 
 OUTDIR="/home/spencerh/data/CAPER/Wallops/post-vibe"
 FILE_PREFIX="_postvibe"
 
 print_defaults () {
-    echo "${0} <CHANNEL NAME> <MODE> <PORT (default: ${PORT})> <ACQUISITION TIME: (default:${ACQTIME} s)>"
+    echo "${0} <CHANNEL NAME> <MODE> <ACQUISITION TIME: (default:${ACQTIME} s)> <PORT (default: ${PORT})>"
     echo ""
     echo -e "MODES"
     echo -e "====="
@@ -23,15 +23,16 @@ print_defaults () {
     echo ""
     echo -e "CHANNEL NAMES"
     echo -e "============="
-    echo -e "\tDartmouth:"
-    echo -e "\t\tSKIN-{LO,HI}"
-    echo -e "\t\tELF-{A,B}{LO,HI}"
-    echo -e "\t\tVF-{A,B}{LO,HI}"
-    echo -e "\t\tVLF{A,B}"
-    echo -e "\t\tVLF{A,B}-AGC"
-    echo -e "\t\tHF-AGC"
-    echo -e "\tOslo:"
-    echo -e "\t\tLPC{1,2,3,4}"
+    echo -e "\n"
+    echo -e "\tDartmouth:\tSKIN-{LO,HI}"
+    echo -e "\t\t\tELF-{A,B}{LO,HI}"
+    echo -e "\t\t\tVF-{A,B}{LO,HI}"
+    echo -e "\t\t\tVLF{A,B}"
+    echo -e "\t\t\tVLF{A,B}-AGC"
+    echo -e "\t\t\tHF-AGC"
+    echo -e "\n"
+    echo -e "\tOslo:\t\tLPC{1,2,3,4}"
+    echo -e "\t\t"
 }
 
 telnet_start () {
