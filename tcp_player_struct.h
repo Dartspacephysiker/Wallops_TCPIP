@@ -36,6 +36,7 @@ struct player_opt {
 
   bool debug;
   bool verbose;
+  bool diag;
 };
 
 /* colonel frame structure */

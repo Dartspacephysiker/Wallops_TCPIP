@@ -691,27 +691,27 @@ void *tcp_player_data_pt(void *threadarg) {
 	      //		printf("BEFORE new combbuff %llu = %p\n", i, combbuff);
 	      combine_and_write_chandata_buff( chan[0], chan[1], 0, parser, combbuff, &count );
 	      if( count > 0 ) { 
-		fwrite((void *)combbuff, 2, count, ofile);
+		if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
 		if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
 		if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
 	      }
 	      //		printf("AFTER new combbuff %llu = %p\n", i, combbuff);
 	    }
 	    for(int i = 0; i < 2; i ++){
-	      write_chan_samples( chan[i], false, parser, true );
+	      if( !arg.o.diag ) write_chan_samples( chan[i], false, parser, true );
 	    }
 	      
 	    if( noldpacks_ready == 2 ){
 	      if( parser->do_chans == 3 ){
 		combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, combbuff, &count );
 		if( count > 0 ) { 
-		  fwrite((void *)combbuff, 2, count, ofile);
+		  if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
 		  if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
 		  if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
 		}
 	      }
 	      for(int i = 0; i < 2; i ++){
-		write_chan_samples( chan[i], true, parser, true );
+		if( !arg.o.diag ) write_chan_samples( chan[i], true, parser, true );
 	      }
 	    }
 	    for( int i = 0; i < 2; i++ ) {
@@ -722,13 +722,13 @@ void *tcp_player_data_pt(void *threadarg) {
 	    if( parser->do_chans == 3 ){
 	      combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, combbuff, &count ); 
 	      if( count > 0 ) { 
-		fwrite((void *)combbuff, 2, count, ofile);
+		if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
 		if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
 		if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
 	      }
 	    }
 	    for(int i = 0; i < 2; i ++){
-	      write_chan_samples( chan[i], true, parser, true );
+	      if( !arg.o.diag ) write_chan_samples( chan[i], true, parser, true );
 	      clean_chan_buffer( chan[i], false );
 	    }
 	  }
@@ -766,9 +766,9 @@ void *tcp_player_data_pt(void *threadarg) {
     //    printf("Writing %li bytes to %s\n",parser->bufrem, ostr);
     if( arg.o.runmode != 6 ){
       printf("Writing %li bytes\n", parser->bufrem );
-      count = fwrite(buff, 1, parser->bufrem, ofile);
+      if( !arg.o.diag ) count = fwrite(buff, 1, parser->bufrem, ofile);
       if( arg.o.dt > 0 ) fifo_write( fifo, buff, parser->bufrem );
-      if( count == 0 && parser->bufrem != 0 ){
+      if( !arg.o.diag && count == 0 && parser->bufrem != 0 ){
 	printf("Gerrorg writing to %s\n", ostr);
 	*arg.running = false; 
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
