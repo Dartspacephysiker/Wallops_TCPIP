@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-PORT=${4:-5003}
+PORT=${5:-5003}
 
 
 TM2="192.168.2.202"
@@ -13,11 +13,18 @@ TMPORT="8999"
 SLEEP="2"
 ACQTIME=${3:-45}
 
+#DIAG={$4:+"-D}"
+#DIAG=""
+#Diagnostic mode
+#[ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
+
+
+
 OUTDIR="/home/spencerh/data/CAPER/Wallops/vibe/RxDSP"
 FILE_PREFIX="_sequence"
 
 print_defaults () {
-    echo "${0} <MODE> <RxDSP NAME (master|slave)> <ACQUISITION TIME: (default:${ACQTIME} s)> <PORT (default: ${PORT})>"
+    echo "${0} <MODE> <RxDSP NAME (master|slave)> <ACQUISITION TIME: (default:${ACQTIME} s)> <Diagnostic (no acq)[0|1]> <PORT (default: ${PORT})>"
     echo ""
     echo -e "MODES"
     echo -e "====="

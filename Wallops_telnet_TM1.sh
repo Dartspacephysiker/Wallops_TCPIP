@@ -3,15 +3,16 @@
 
 TM1="192.168.2.201"
 TM1PORT="8999"
-PORT=${4:-5010}
+PORT=${5:-5010}
 SLEEP="2"
 ACQTIME=${3:-45}
+DIAG=""
 
 OUTDIR="/home/spencerh/data/CAPER/Wallops/post-vibe"
-FILE_PREFIX="_postvibe"
+FILE_PREFIX="_Z_vibe"
 
 print_defaults () {
-    echo "${0} <CHANNEL NAME> <MODE> <ACQUISITION TIME: (default:${ACQTIME} s)> <PORT (default: ${PORT})>"
+    echo "${0} <CHANNEL NAME> <MODE> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})>"
     echo ""
     echo -e "MODES"
     echo -e "====="
@@ -63,6 +64,10 @@ telnet_stop () {
     } | tee >(telnet ${TM1} ${TM1PORT});
 }
 
+#Diagnostic mode
+[ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
+
+#Which channels to look at?
 case $1 in
     "VLFA" | "VLF" ) 
 	MSBCH="27"; LSBCH="28";
@@ -212,9 +217,9 @@ case $2 in
     "1" )
 	telnet_start;;
     "2" )
-	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} & telnet_start;;
+	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} & telnet_start;;
     "3" )
-	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} & telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD};;
+	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG}& telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD};;
     * )
 	echo -e "Invalid mode/no mode given!\n";
 	print_defaults;;
