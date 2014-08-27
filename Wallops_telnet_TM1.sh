@@ -7,9 +7,12 @@ PORT=${5:-5010}
 SLEEP="2"
 ACQTIME=${3:-45}
 DIAG=""
+#Diagnostic mode
+[ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
 
-OUTDIR="/home/spencerh/data/CAPER/Wallops/post-vibe"
-FILE_PREFIX="_Z_vibe"
+
+OUTDIR="/home/spencerh/data/CAPER/Wallops/post-vibe/TM1"
+FILE_PREFIX="-post-vibe-"
 
 print_defaults () {
     echo "${0} <CHANNEL NAME> <MODE> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})>"
@@ -63,9 +66,6 @@ telnet_stop () {
 	echo "exit"; sleep ${SLEEP};
     } | tee >(telnet ${TM1} ${TM1PORT});
 }
-
-#Diagnostic mode
-[ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
 
 #Which channels to look at?
 case $1 in
@@ -130,47 +130,53 @@ case $1 in
 	PORT=5042;
 	ACQSZ=4096;
 	RTD="ELFALO";
-        RTDSZ=1024;
+        RTDSZ=512;
+#	ACQ_SLEEP="-s 200";
 	echo "Selected ELF-ALO...";; 
     "ELF-AHI" | "ELFAHI" ) 
 	MSBCH="45"; LSBCH="46";
 	PORT=5044;
 	ACQSZ=4096;
 	RTD="ELFAHI";
-        RTDSZ=1024;
+        RTDSZ=512;
+#	ACQ_SLEEP="-s 200";
 	echo "Using ELF-AHI...";;
     "ELF-BLO" | "ELFBLO" ) 
 	MSBCH="47"; LSBCH="48";
 	PORT=5046;
 	ACQSZ=4096;
 	RTD="ELFBLO";
-        RTDSZ=1024;
+        RTDSZ=512;
+	ACQ_SLEEP="-s 200";
 	echo "Selected ELF-BLO...";; 
     "ELF-BHI" | "ELFBHI" ) 
 	MSBCH="49"; LSBCH="50";
 	PORT=5048;
 	ACQSZ=4096;
 	RTD="ELFBHI";
-        RTDSZ=1024;
+        RTDSZ=512;
+	ACQ_SLEEP="-s 200";
 	echo "Selected ELF-BHI...";;
     "SKIN-LO" | "SKINLO" ) 
 	MSBCH="51"; LSBCH="52";
 	PORT=5050;
 	ACQSZ=4096;
 	RTD="SKINLO";
-        RTDSZ=1024;
+	ACQ_SLEEP="-s 200";
+        RTDSZ=512;
 	echo "Selected SKIN-LO...";; 
     "SKIN-HI" | "SKINHI" | "SKIN" ) 
 	MSBCH="53"; LSBCH="54";
 	PORT=5052;
 	ACQSZ=4096;
 	RTD="SKINHI";
-        RTDSZ=1024;
+	ACQ_SLEEP="-s 200";
+        RTDSZ=512;
 	echo "Selected SKIN-HI...";;
     "HF-AGC" | "HFAGC" ) 
 	MSBCH="55"; LSBCH="56";
 	PORT=5054;
-	ACQSZ=4096;
+	ACQSZ=8092;
 	RTD="HFAGC";
         RTDSZ=1024;
 	echo "Selected HF-AGC...";; 
@@ -217,9 +223,11 @@ case $2 in
     "1" )
 	telnet_start;;
     "2" )
-	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} & telnet_start;;
+	echo "/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P \"TM1_${RTD}${FILE_PREFIX}\" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} & telnet_start";
+	/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} ${ACQ_SLEEP} & telnet_start;;
     "3" )
-	./tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG}& telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD};;
+	echo "/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P \"TM1_${RTD}${FILE_PREFIX}\" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} & telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD}";	
+	/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} ${ACQ_SLEEP} & telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD};;
     * )
 	echo -e "Invalid mode/no mode given!\n";
 	print_defaults;;
