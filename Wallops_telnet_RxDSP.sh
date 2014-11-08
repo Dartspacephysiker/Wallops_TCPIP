@@ -65,7 +65,7 @@ case $2 in
   "2" | "TM2" | "Master" | "MASTER" | "master" | "m" ) 
 	TM=${TM2}
 	CH=${TM2_CH};
-	PORT=5003;
+	PORT=${5-"5003"};
 	ACQSZ=262244;
 	RTD="tcpRxDSP";
         RTDSZ=65536;
@@ -73,7 +73,7 @@ case $2 in
     "3" | "TM3" | "Slave" | "SLAVE" | "slave" | "s" ) 
 	TM=${TM3}
 	CH=${TM3_CH};
-	PORT=5004;
+	PORT=${5:-"5004"};
 	ACQSZ=262244;
 	RTD="tcpRxDSP";
         RTDSZ=65536;
