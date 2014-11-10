@@ -14,9 +14,41 @@
 #include <math.h>
 
 #define STARTSTR_SZ 8
-#define MAXNUMSAMPS 20000
+#define MAXNUMSAMPS 100000 //should be more than enough
 
-//This assumes only one synchronous channel!
+/* This one is for pulling in PCM data, the structure of which 
+ * (at least for a single synchronous PCM channel coming from the DEWESoft 
+ * NET interface at Wallops) is as follows:
+ * 
+ * Bytes 0-7:  Start packet string: { 0x00, 0x01, 0x02, 0x03, /
+ *                                   0x04, 0x05, 0x06, 0x07 }
+ * Bytes 8-11: (32-bit int) Packet size in bytes without stop and start string
+ * Bytes 12-15: (32-bit int) Packet type (always zero for data packets)
+ * Bytes 16-19: (32-bit int) Number of synchronous samples per channel
+ * Bytes 20-27: (64-bit int) Number of samples acquired so far
+ * Bytes 28-35: (Double floating point) Absolute/relative time
+ *              (# days since 12/30/1899 | number of days since start of acq)
+ * 
+ * *Total header offset is 36 bytes*
+ *
+ * Bytes 36-39: Number of samples
+ * Bytes 40-(# of samples * sample data type, which should be two-byte unsigned words): Data
+ */
+/* struct tcp_header { */
+/*   unsigned char start_str[8]; */
+/*   uint32_t pack_sz; //in bytes */
+/*   uint32_t pack_type; */
+/*   uint32_t pack_numsamps; //number of synchronous samples per channel  */
+/*                           //(there should only be one channel) */
+/*   uint64_t pack_totalsamps; //number of samples acquired so far */
+/*   double pack_time; // as given above */
+
+/*   uint32_t sync_numsamps; */
+
+/* }; */
+
+//The tcp_header.sync_numsamps variable should be the same for every channel present, but I haven't
+//verified that! In specific, it might be possible for ch0 to pull in, e.g., 8000 samps and ch1 only 7092.
 struct tcp_header {
 
   char start_str[STARTSTR_SZ];
@@ -149,13 +181,16 @@ struct dewe_chan {
   int32_t oldnumtbytes;
   int32_t oldtbytes_received;
 
-  char * tstamps_addr;
+  char *tstamps_addr;
   int32_t numtbytes;
   int32_t tbytes_received;
   
 
-  char outfname[128];
+  char outfname[256];
   FILE *outfile;
+  char ts_fname[256];
+  FILE *ts_file;
+  int packs_tofile;
 
 };
 
@@ -180,13 +215,15 @@ int post_strip(struct tcp_parser *, char *, struct tcp_header *);
 
 //chan routines
 int get_chan_samples(struct dewe_chan *, char *, struct tcp_parser *, struct tcp_header *, bool);
-int write_chan_samples(struct dewe_chan *, struct tcp_parser *, struct tcp_header *);
+int write_chan_samples(struct dewe_chan *, int, struct tcp_parser *, bool );
 int update_chans_post_parse(struct dewe_chan *, struct tcp_header *, struct tcp_parser *, char *);
 int print_chan_info(struct dewe_chan *);
-int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, struct tcp_header *, FILE *);
+int combine_and_write_chandata(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *, FILE *);
+int combine_and_write_chandata_buff(struct dewe_chan *, struct dewe_chan *, int, struct tcp_parser *,  uint16_t *, long int *);
 int16_t join_chan_bits(char, char);
 uint16_t join_upper10_lower6(uint16_t, uint16_t, bool);
-int clean_chan_buffer(struct dewe_chan *);
+uint16_t join_upper10_lower6_p(uint16_t *, uint16_t *, bool from_network);
+int clean_chan_buffer(struct dewe_chan *, char );
 
 //end of loop routines
 int update_end_of_loop(struct tcp_parser *, char *, struct tcp_header *);

@@ -1,7 +1,7 @@
 CC = gcc
 
-CFLAGS = -fPIC -Wall -std=gnu99 -g -Iutils/ #-O2
-LDFLAGS = -pipe -Wall -lm -pthread -g #-O2
+CFLAGS = -fPIC -Wall -std=gnu99 -Iutils/ -O2
+LDFLAGS = -pipe -Wall -lm -pthread -O2
 
 EXEC = tcp_player
 

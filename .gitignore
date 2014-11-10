@@ -1,5 +1,9 @@
 # object files
 *.o
+
+# stupid files
+*~
+
 # link to datadir
 Wallops_TCPdata
 
@@ -8,5 +12,5 @@ search_tcpipdata*
 
 # executables
 tcp_player
-
 tcp_fileparse
+utils/tcp_tstamp_to_ascii

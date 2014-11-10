@@ -117,8 +117,7 @@ void tcp_play(struct player_opt o) {
     }
     if ((fstat(rfd, &sb) == -1) || (!S_ISREG(sb.st_mode))) {
       printe("Improper rtd file.\n"); return;
-    }
-    
+    }    
     int mapsize;
     if(o.digitizer_data) {
       mapsize = o.num_ports*rtdsize + 72;
@@ -164,17 +163,6 @@ void tcp_play(struct player_opt o) {
       rtdh.prtd.byte_packing=0;
       rtdh.prtd.code_version=0.1;
     }
-/*     header.num_read = o.rtdsize*o.num_ports; */
-/*     sprintf(header.site_id,"%s","RxDSP Woot?"); */
-/*     header.hkey = 0xF00FABBA; */
-/*     header.num_channels=o.num_ports; */
-/*     header.channel_flags=0x0F; */
-/*     header.num_samples=o.rtdsize; */
-/* //!!! DOES THIS NEED TO BE CHANGED TO 960000? */
-/*     header.sample_frequency=960000; */
-/*     header.time_between_acquisitions=o.dt; */
-/*     header.byte_packing=0; */
-/*     header.code_version=0.1; */
   }
     
   /*
@@ -213,9 +201,6 @@ void tcp_play(struct player_opt o) {
 	     sizeof( struct prtd_header_info ), rtdsize, o.num_ports);
     }
   }
-  //  if (o.debug) printf("Size of header: %li, rtdsize: %i, o.num_ports: %i.\n", sizeof(header), rtdsize, o.num_ports);
-
-
   /*
    * Now we sit back and update RTD data until all files quit reading.
    */
@@ -239,15 +224,9 @@ void tcp_play(struct player_opt o) {
 	  rtdh.cprtd.start_time = time(NULL);
 	  rtdh.cprtd.start_timeval = now;
 	  rtdh.cprtd.averages = o.rtdavg;
-	/* header.start_time = time(NULL); */
-	/* header.start_timeval = now; */
-	/* header.averages = o.rtdavg; */
 
 	  memmove(rmap, &rtdh.cprtd, sizeof(struct header_info));
 	  memmove(rmap+102, rtdout, rtdsize*o.num_ports);
-	  /* memmove(rmap, &header, sizeof(struct header_info)); */
-	  /* memmove(rmap+102, rtdout, rtdsize*o.num_ports); */
-
 	}
 	else {
 	  rtdh.prtd.start_time = time(NULL);
@@ -309,6 +288,7 @@ void *tcp_player_data_pt(void *threadarg) {
   //  long int skip_loc;
   //  long int oldskip_loc;
   char *fifo_outbytes;
+  char fifo_srch[18];
   
 
   /**************************************/
@@ -319,7 +299,7 @@ void *tcp_player_data_pt(void *threadarg) {
   int sin_size; // to store struct size
 
   /* For keeping track of how much gets sent */
-  int imod = 10;
+  //  int imod = 10;
 
   struct sockaddr_in addr_local;
   struct sockaddr_in addr_remote;
@@ -329,44 +309,23 @@ void *tcp_player_data_pt(void *threadarg) {
   struct tcp_parser *parser;
   char tcp_str[16] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-
-  /* int tcp_hc = 0; //tcp header count */
-  /* int tcp_tc = 0; //tcp footer count */
-  /* int tcp_hdrsz = 40; */
-  /* int tcp_tailsz = 8; */
-  void *oldheader_loc;
-  void *header_loc;
-  void *tail_loc;
-  long int tail_diff = 0;
-  long int header_diff = 0;
-  long int keep;
-
   //Channel stuff
   struct dewe_chan *chan[MAX_NUMCHANS];
   char *chanbuff[MAX_NUMCHANS];
   char *chantimestamps[MAX_NUMCHANS];
-  char combfname[] = "combined_chans.data";
-  FILE *combfile; //File for combining upper 10, lower 6 bits of two different channels
+  uint16_t *combbuff;
+  char combfname[] = "combinedchans";
+  //  FILE *combfile; //File for combining upper 10, lower 6 bits of two different channels
                   //to accommodate the strange 10-bit TM data at Wallops
 
 
   /**************************************/
 
-  //  struct tcp_header packet = { .start_str = { 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7 }, 
-  //				.pack_sz = 0, .pack_numsamps = 0, .pack_totalsamps = 0,
-  //				.pack_time = 0.0 };
-
-  char *dataz;
-  long int count = 0, ret = 0;
+  char *buff;
+  long int count = 0, bufcount = 0; //, ret = 0;
   long long unsigned int i = 0;
   long long unsigned int frames, wcount;
   //  void *hptr; //pointer to header
-
-  /* printf("Here comes packet start string:\n"); */
-  /* for (int j = 0; j < 8; j++) { */
-  /*   printf("%x",tcp_hdr.start_str[j]); */
-
-  /* } */
 
   //time, rtd stuff
   int rtdbytes;
@@ -380,6 +339,15 @@ void *tcp_player_data_pt(void *threadarg) {
 
   if (arg.o.debug) { printf("Port %u thread init.\n", arg.port); fflush(stdout); }
 
+  //data setup
+  buff = malloc(arg.o.revbufsize);
+  frames = count = wcount = 0;
+
+  //outfile string
+  gmtime_r(&arg.time, &ct);
+  sprintf(ostr, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u", arg.o.outdir, arg.o.prefix,
+	  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec, arg.port);
+
   //rtd setup
   rtdbytes = arg.o.rtdsize*sizeof(short int);
   gettimeofday(&start, NULL);
@@ -389,28 +357,28 @@ void *tcp_player_data_pt(void *threadarg) {
   fifo = malloc( sizeof(*fifo) );
   fifo_init(fifo, 4*rtdbytes);  
   fifo_outbytes = malloc(rtdbytes);
-  long int fifo_count;
+  strcpy(fifo_srch, "aDtromtu hoCllge");
+  //  strcpy(fifo_srch,"Dartmouth College");
 
   //tcp header stuff
   tcp_hdr = tcp_header_init();
 
   //tcp parser stuff
   parser = parser_init();
-
   parser->hdrsz = 40; //per DEWESoft NET interface docs
 
   //copy in start and tail string for use by parse_tcp_header() and strip_tcp_packet()
-  if( o.verbose ) printf("tcp_fileparse.c [main()] Start string:\t");
+  if( arg.o.verbose ) printf("tcp_player.c [tcp_player_data_pt()] Start string:\t");
   for (int i = 0; i < STARTSTR_SZ; i ++){
     strncpy(&(parser->startstr[i]),&(tcp_str[8+i]),1);
-    if ( o.verbose ) printf("%x",parser->startstr[i]);
+    if ( arg.o.verbose ) printf("%x",parser->startstr[i]);
   }
-  if( o.verbose ) printf("\n");
+  if( arg.o.verbose ) printf("\n");
   parser->startstr_sz = STARTSTR_SZ;
 
-  if( o.verbose ) printf("tcp_fileparse.c [main()] Tail string:\t");
+  if( arg.o.verbose ) printf("tcp_player.c [tcp_player_data_pt()] Tail string:\t");
   strncpy(parser->tlstr,tcp_str,STARTSTR_SZ); 
-  if (o.verbose ){
+  if ( arg.o.verbose ){
     for (int i = 0; i < STARTSTR_SZ; i ++){
       printf("%x",parser->tlstr[i]);
     }
@@ -418,41 +386,119 @@ void *tcp_player_data_pt(void *threadarg) {
   }
   parser->tailsz = STARTSTR_SZ;
   parser->oldhpos = -(parser->hdrsz + parser->tailsz); //Needs to be initialized thusly so that 
-  parser->do_predict = true;                           //parse_tcp_header doesn't complain that 
+  parser->do_predict = false;                           //parse_tcp_header doesn't complain that 
   parser->isfile = false;                              //the first header isn't where predicted
-  parser->verbose = o.verbose;                              
+  parser->verbose = arg.o.verbose;                              
 
+  //  if( arg.o.runmode == 4 || arg.o.runmode == 5 ){
+  if( arg.o.runmode > 0 ){
 
-  
+    //Strip packet modes
+    if( arg.o.runmode <= 2 ){ 
+      parser->strip_packet = arg.o.runmode;
+      parser->strip_fname = malloc(sizeof(char) * 128);
+      parser->strip_fname = "-stripped";
+      strncat( ostr, parser->strip_fname, 16 );
+      //    sprintf(parser->strip_fname,"stripped-%s",filename);
+      parser->oldt_in_this_buff = 0;
+      parser->t_in_this_buff = 0;
+    }
+    //Channel modes
+    else if( arg.o.runmode == 4 ||  arg.o.runmode == 5 || arg.o.runmode == 6 ){ // only parse chan info 
+      parser->do_chans = arg.o.runmode - 3;
+      /* if( argc == 5 ){ //channel num provided */
+      /* 	parser->nchans = atoi(argv[4]); */
+      /* } */
+      /* else { */
+	parser->nchans = arg.o.nchan;
+      /* } */
+      if( arg.o.verbose ) printf("tcp_player.c [tcp_player_data_pt()] parser->nchans\t=\t%i\n",parser->nchans);
+    }
+  }
 
+  //tcp chan stuff
+  if( parser->do_chans ){
+    for (int i = 0; i < parser->nchans; i ++) {
 
-  //data setup
-  dataz = malloc(arg.o.revbufsize);
-  frames = count = wcount = 0;
+      chan[i] = chan_init( i, 3, true, false); //channel num, data type 3 (16-bit unsigned int), async, not singleval
+
+      if( ( parser->do_chans == 2 ) || ( parser->do_chans == 3 ) ){ //open files for chandata
+	snprintf(chan[i]->outfname, 256, "%s-CH%i.data", ostr, chan[i]->num);
+	chan[i]->outfile = fopen(chan[i]->outfname,"w");
+	if (chan[i]->outfile == NULL) {
+	  fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->outfname, chan[i]->num );
+	  arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval);
+	  //return(EXIT_FAILURE);
+	}
+	if( arg.o.verbose ){
+	  printf("Channel %i file:\t\t%p\n", i, chan[i]->outfile );
+	  printf("Channel %i filename:\t\t%s\n", i, chan[i]->outfname);
+	}
+	
+	//tstamp files
+	if( chan[i]->is_asynchr ){
+	  //	  sprintf(chan[i]->ts_fname,"chan%i_tstamps.data",i);
+	  /* sprintf(chan[i]->ts_fname, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u-CH%i_tstamps.data", arg.o.outdir,  */
+	  /* 	  arg.o.prefix,  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec,  */
+	  /* 	  arg.port,chan[i]->num); */
+	  snprintf(chan[i]->ts_fname, 256, "%s-CH%i_tstamps.data", ostr, chan[i]->num );
+	  chan[i]->ts_file = fopen(chan[i]->ts_fname,"w");
+	  if (chan[i]->ts_file == NULL) {
+	    fprintf(stderr,"Gerrorg. Couldn't open %s for channel %i.\n", chan[i]->ts_fname, chan[i]->num );
+	    arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval);
+	    //	    return(EXIT_FAILURE);
+	  }
+	  if( arg.o.verbose ){
+	    printf("Channel %i timestamp file:\t\t%p\n", i, chan[i]->ts_file );
+	    printf("Channel %i timestamp filename:\t\t%s\n", i, chan[i]->ts_fname);
+	  }
+	}
+      }
+    }
+
+    //chan buffs
+    for(int i = 0; i < parser->nchans; i++){
+      chanbuff[i] = malloc( chan[i]->bufsize );
+      chan[i]->d.type3 = chanbuff[i];
+      chan[i]->packaddr = chan[i]->d.type3;
+      chan[i]->oldpackaddr = chan[i]->d.type3;
+      if( chan[i]->is_asynchr ){
+	chantimestamps[i] = malloc( MAXNUMSAMPS * 8);
+	chan[i]->oldtstamps_addr = chan[i]->tstamps_addr = chan[i]->timestamps = chantimestamps[i];
+	if( arg.o.debug ) printf("tcp_player.c [tcp_player_data_pt()] Malloc'ed %i bytes for channel %u"
+				 " timestamps buffer...\n", MAXNUMSAMPS * 8, chan[i]->num );
+      }
+    }
+    if( parser->do_chans == 3){ //doing join_upper10_lower6
+      combbuff = calloc( MAXNUMSAMPS, 2 );
+      strncat( ostr, combfname, 16 ); 
+      if( arg.o.verbose ){ printf("Combined data filename: %s\n", ostr); }
+    }
+  }  
 
   //outfile setup
-  gmtime_r(&arg.time, &ct);
-  sprintf(ostr, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u.data", arg.o.outdir, arg.o.prefix,
-	  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec, arg.port);
-  ofile = fopen(ostr, "a");
+  strncat( ostr, ".data", 5 ); //and finally...
+  ofile = fopen(ostr, "a+");
   if (ofile == NULL) {
     fprintf(stderr, "Failed to open output file %s.\n", ostr);
     arg.retval = EEPP_FILE; pthread_exit((void *) &arg.retval);
   }
-   
-  // I don't think we want to sleep while acquiring TCP/IP data streams at high rates...
-  // But for the purposes of testing on a local machine, I need to simulate delay
-  //  printf("Sleeping %i us.\n", 10000);
-  
+
+  //Parser prediction stuff
+  if(parser->do_predict){
+    parser->hprediction = 0; //At the beginning, we predict that the header will be right at the beginning!
+    parser->num_badp = 0;
+  }   
+
   /*
    * Set up port for listening
    */
-
   /* Get the Socket file descriptor */
   if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
     {
-      printf ("ERROR: Failed to obtain Socket Descriptor.\n");
-      return (0);
+      printf ("ERROR: Failed to obtain socket descriptor.\n");
+      arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+      //      return (0);
     }
   else printf ("[server] obtain socket descriptor successfully.\n");
   setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
@@ -463,7 +509,7 @@ void *tcp_player_data_pt(void *threadarg) {
   addr_local.sin_addr.s_addr = INADDR_ANY; // AutoFill local address
   bzero(&(addr_local.sin_zero), 8); // Flush the rest of struct
 
-  /* Bind a special Port */
+  /* Bind that port */
   if( bind(sockfd, (struct sockaddr*)&addr_local, sizeof(struct sockaddr)) == -1 )
     {
       printf ("ERROR: Failed to bind Port %d.\n",arg.port);
@@ -476,11 +522,11 @@ void *tcp_player_data_pt(void *threadarg) {
   sin_size = sizeof(struct sockaddr_in);  
   if(listen(sockfd,BACKLOG) == -1)
     {
-      printf ("ERROR: Failed to listen Port %d.\n", arg.port);
+      printf ("ERROR: Failed to listen to port %d.\n", arg.port);
       *arg.running = false;
       arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
     }
-  else printf ("[server] listening the port %d sucessfully.\n", arg.port);
+  else printf ("[server] listening to port %d sucessfully.\n", arg.port);
 
   /* Wait for a connection, and obtain a new socket file despriptor for single connection */
   if ((nsockfd = accept(sockfd, (struct sockaddr *)&addr_remote, &sin_size)) == -1) {
@@ -495,185 +541,287 @@ void *tcp_player_data_pt(void *threadarg) {
   /*
    * Main data loop
    */
+  int bufsz = arg.o.revbufsize;
   while ( *arg.running ) {
-    if (arg.o.debug) { printf("Port %u debug.\n", arg.port); fflush(stdout); }
-    //    usleep(sleeptime);
-      
-    if (arg.o.debug) { printf("Port %u read data.\n", arg.port); fflush(stdout); }
-    
-    memset(dataz, 0, arg.o.revbufsize);
+    //    if (arg.o.debug) { printf("Port %u read data.\n", arg.port); fflush(stdout); }
+    memset(buff, 0, arg.o.revbufsize);    
 
-    /* Read me */
-    if(arg.o.sleeptime) usleep(arg.o.sleeptime);
-    count = recv(nsockfd, dataz, arg.o.revbufsize, 0);
-    if(count < 0)
+    bufcount = recv(nsockfd, buff, bufsz, 0);
+    if(bufcount < 0)
       {
 	fprintf(stderr,"Couldn't read tcp port %u!!\n",arg.port);
 	*arg.running = false;
 	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
-    else if(count == 0)
+    else if(bufcount == 0)
       {
 	printf("[server] connection lost.\n");
 	*arg.running = false;
-	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+	//	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
       }
 
-    ret = fwrite(dataz, sizeof(char), count, ofile);
-    if(ret < count)
-      {
-	printf("File write failed.\n");
-	*arg.running = false;
-	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
-      }
-    wcount += ret;
-  
-    gettimeofday(&then, NULL);
-
-      // Copy into RTD memory if we're running the display
-
-    if(i % imod == 0)
-      {
-	printf("Received %li bytes\n", ret);
-      }
-
-
-    if (arg.o.dt > 0) {
+    if(arg.o.sleeptime) usleep(arg.o.sleeptime);
       
-      parser->hc = 0;
-      tail_diff = 0;
-      header_diff = 0;
-      keep = (long int)count;
 
-      tail_loc = memmem(dataz, count, tcp_str, 8);
-      oldheader_loc = memmem(dataz, keep, &tcp_str[8], 8);
+    if( arg.o.verbose ) printf("\n***\nBuffer #%lli\n***\n",i++);
+    if( arg.o.verbose ) printf("\n***Received #%li bytes***\n",bufcount);
+    
+    parser->bufrem = bufcount;
+    parser->bufpos = 0;
+    parser->delbytes = 0;
 
-      /*In general, reads will finish before we find the tail, so we want to kill them right here*/
-      if( (tail_loc != NULL ) && ( oldheader_loc != NULL ) && (tail_loc < oldheader_loc) ){
+   while(  parser->bufpos < parser->bufrem ){
+
+      parse_tcp_header(parser, buff, tcp_hdr);       //get new header_addr here
+      update_after_parse_header(parser, buff, tcp_hdr);       //new hpos, bufpos, packetpos, if applicable 
+
+      if( parser->parse_ok ){
+
+	//	if( ( parser->numpackets % imod ) == 0 ) {
+	  printf("*****Packet #%u*****\n",parser->numpackets);
+	  print_tcp_header(tcp_hdr);
+	  //	}
+	if( arg.o.debug ) print_raw_tcp_header(tcp_hdr);
 	
-	if(arg.o.debug){ printf("**\ntail %i loc:%p\n**\n",parser->hc, tail_loc); }
-	
-
-	//get diff between start of dataz and where tail was found so we don't move more than warranted
-	tail_diff = (long int)tail_loc - (long int)dataz;
-	if(arg.o.debug){ printf("tail diff:\t%li\n",tail_diff); }
-
-	keep -= ( parser->tailsz + tail_diff );
-
-	if(arg.o.debug) {printf("Copying %li bytes from %p to %p\n",keep,
-				tail_loc+parser->tailsz, tail_loc); }
-	memmove(tail_loc, tail_loc+parser->tailsz, keep); 
-	parser->tc++; //Got 'im!
-	
-	oldheader_loc -= parser->tailsz; 	  //We killed the tail string, so we need to update the header location
-
-      }
-
-      /*First go, in case dataz starts with a header*/
-      //&tcp_str[8] is address for start string
-      if( oldheader_loc != NULL ){
-	parser->hc++;
-	if(arg.o.debug){printf("**\nheader %i loc:%p\n**\n",parser->hc, oldheader_loc); }
-	
-	//Get tcp packet header data
-	memcpy(tcp_hdr, oldheader_loc, parser->hdrsz);
-	
-	if((i-1) % imod == 0) print_tcp_header(tcp_hdr);
-	
-	//get diff between start of dataz and where header was found so we don't move more than is warranted
-	header_diff = (long int)oldheader_loc - (long int)dataz;
-	if(arg.o.debug){ printf("header diff:\t%li\n",header_diff); }
-
-	keep =  count - parser->hdrsz - header_diff; //Only deal with bytes that haven't been searched or discarded
-
-	if(arg.o.debug) {printf("Copying %li bytes from %p to %p\n",keep,
-				oldheader_loc+parser->hdrsz, oldheader_loc); }
-	memmove(oldheader_loc, oldheader_loc+parser->hdrsz, keep); 
-	//	}	
-
-	//Now data are moved, and oldheader_loc has no header there!
-	//loop while we can still find a footer immediately followed by a header
-	while( ( keep  > 0 )  &&
-	       ( ( header_loc = parse_tcp_header(tcp_hdr, oldheader_loc, keep ) )  != NULL ) ){
-	  parser->hc++;
-	  parser->tc++;
-
-	  //	  printf("**\nheader %i loc:%p\n**\n",tcp_hc,header_loc);
-	  //	  if((i-1) % imod == 0) pack_err = print_tcp_header(tcp_hdr);
-	  //	  pack_err = print_tcp_header(tcp_hdr);
-	
-	  //JUNK HEADER RIGHT HERE
-	  //	  if(junk_tcpheader){
-
-	  header_diff = (long int)header_loc - (long int)oldheader_loc;
-	    
-	  if(arg.o.debug) {printf("header diff:\t%li\n",header_diff); }
-
-	  keep = keep -  header_diff - parser->hdrsz - parser->tailsz; //only keep bytes not searched or discarded
-
-	  if(arg.o.debug){ printf("Keep+totaldiff=\t%li\n",keep+(long int)header_loc-(long int)dataz); }
-
-	  //Notice that the following memmove looks at header_loc MINUS parser->tailsz, which is because we want 
-	  //to kill the footer of the TCPIP packet (i.e., {0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00})
-	  memmove(header_loc-parser->tailsz,header_loc+parser->hdrsz, keep ); 
-	  if(arg.o.debug){ printf("Kept %li bytes\n",keep); }
-	  //	  }
-
-	  oldheader_loc = header_loc;	
-
-	}//while(we can find headers to kill)
-      } //if(oldheader_loc != NULL)
-
-
-      //Want to write all data, excluding headers and footers we've killed
-      fifo_count = count - parser->tc * parser->tailsz - parser->hc * parser->hdrsz; 
-      fifo_write(fifo, dataz, fifo_count);
-
-      //If we missed either a header or a footer, it will get FFTed and make display a little messy
-      if ( (  parse_tcp_header(tcp_hdr, fifo->head, fifo_avail(fifo) ) ) != NULL ) {
-	printf("Missed a tcp header!!!\n"); }
-      if( ( memmem(fifo->head, fifo_avail(fifo), tcp_str, parser->tailsz) ) != NULL ){
-	printf("Missed a footer!!!\n"); }
-
-      if( fifo_avail(fifo) > 2*rtdbytes ) {
-	if( (fifo_loc = fifo_search(fifo, "aDtromtu hoCllge", 2*rtdbytes) ) != EXIT_FAILURE ) {
+	//Current header not where predicted?
+	if( parser->do_predict) {
 	  
-	  //Junk all TCP packet headers
-	    /* oldskip_loc = fifo_loc; */
-	    /* while( ( skip_loc = fifo_skip(skip_str, 16, oldskip_loc, 48,  */
-	    /* 				  rtdbytes - (oldskip_loc - fifo_loc), fifo) ) != EXIT_FAILURE ) { */
-	    /*   printf("Found footer/header string!!\n"); */
+	  if( parser->hpos != parser->hprediction ) {
+	    parser->num_badp +=1;
+	    printf("***Header position not where predicted by previous packet size!\n");
+	    printf("***Header position relative to beginning of buffer:\t%li\n",parser->hpos);
+	    printf("***Predicted position relative to beginning of buffer:\t%li\n",parser->hprediction);
+	    printf("***Missed by %li bytes... Try again, Hank.\n",parser->hprediction-parser->hpos);
+	  }
+	  else {
+	    printf("***Header %i was found where predicted: %li\n",parser->hc,parser->hprediction);
+	    parser->tc +=1; //Since the prediction was correct, there must have been a tail
+	  }
+	  //predicted position of the next header
+	  parser->hprediction = parser->hpos + tcp_hdr->pack_sz + parser->tailsz + parser->startstr_sz;
+	} 	
+      }	
+      //Strip packet modes
+      if( parser->strip_packet ){
 
-	    /*   packet_hcount++; */
-	    /*   printf("Killed a packet header\n"); */
-	    /*   oldskip_loc = skip_loc; */
-	      
-	    //	    if( i % imod == 0 ) {
-	    //	      printf("Killed %i packet headers\n", packet_hcount);
-	      //	    }
-	    /* fifo_loc = oldskip_loc; */
-	    /* }	   */
+	prep_for_strip(parser, buff, tcp_hdr); 	//determines whether there are footers to kill
+	strip_tcp_packet(parser, buff, tcp_hdr); 	//do the deed
+	if( parser->do_predict ) { 	
+	  parser->hprediction -= ( ( (int)parser->oldtkill + (int)parser->tkill) * parser->tailsz +
+				   parser->hkill * parser->hdrsz );	  
+	}	
+	post_strip(parser, buff, tcp_hdr); 	//finish the job	
+      } //end strip_packet
 
-	  fifo_kill(fifo, fifo_loc);
-	  fifo_read(fifo_outbytes, fifo, rtdbytes);
-	  
-	  pthread_mutex_lock(arg.rlock);
+      //Channel modes
+      if( parser->do_chans ){
+	if( parser->do_chans > 1 ){ //time to write chan data
 
-	  if (arg.o.debug) {
-	    printf("Port %u rtd moving rtdbytes %i from cfb %p to rtdb %p with %lu avail.\n",
-		   arg.port, rtdbytes, dataz, arg.rtdframe, count);
+	  if( parser->parse_ok ){
+	    for(int i = 0; i < parser->nchans; i++){
+	      update_chans_post_parse( chan[i], tcp_hdr, parser, buff ); //get new packet stuff, if applicable
+	      print_chan_info( chan[i] ); 	    //tell me about it
+	    }
 	  }
 
+	  bool moresamps = true;      
+	  long int tmp_buf_pos = parser->bufpos;
+
+	  if( parser->parse_ok ){
+	    //temp set to zero because we want everything in the buffer BEHIND the new header
+	    if( parser->oldhpos < 0 ) {
+	      parser->bufpos = 0; 
+	    }
+	    else {
+	      parser->bufpos = parser->oldhpos; 
+	    }
+	    
+	    //wrap up old channel data, which will only be here if we got a new header
+	    for(int i = 0; i < parser->nchans; i++){
+	      //	    if( chan[i]->oldnumsampbytes != chan[i]->oldnumbytes_received && parser->bufpos < parser->hpos  ){
+	      if( ( chan[i]->oldnumsampbytes != chan[i]->oldnumbytes_received || 
+		    chan[i]->oldnumtbytes != chan[i]->oldtbytes_received ) && parser->bufpos < parser->hpos  ){
+		if( arg.o.debug ) {
+		  printf("tcp_fileparse.c [main()] CH%i: Doing old samples\n", i );
+		  printf("tcp_fileparse.c [main()] CH%i: Bufpos = %li\n", i, parser->bufpos );
+		  printf("tcp_fileparse.c [main()] CH%i: hpos = %li\n", i, parser->hpos );
+		}
+		get_chan_samples( chan[i], buff, parser, tcp_hdr, true);
+	      }
+	    }
+	    if( arg.o.debug ) {
+	      printf("tcp_fileparse.c [main()] Finished oldsamps. Bufpos should be right behind hpos!\n");
+	      printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);	  
+	      if( (parser->bufpos += parser->tailsz ) != parser->hpos && parser->oldhpos > 0 ) {
+		printf("Channels read incorrectly!!!\n");
+		printf("tcp_fileparse.c [main()] hpos = %li, bufpos == %li\n", parser->hpos, parser->bufpos);
+	      }
+	    }
+	    parser->bufpos =  parser->hpos + parser->hdrsz - 4; //skip header for next get_chan_samples
+
+	    moresamps = true; //reset for next bit
+	  }  
+	  
+	  for(int j = 0; j < parser->nchans; j++ ){
+	    if( moresamps ) {
+	      moresamps = get_chan_samples( chan[j], buff, parser, tcp_hdr, false);
+	    } else { break; }
+	  }
+	  
+	  parser->bufpos = tmp_buf_pos; //set it to what it was before channels messed with it
+
+	  int npacks_ready = 0;
+	  int noldpacks_ready = 0;
+	  
+	  for(int i = 0; i < 2; i ++){
+	    noldpacks_ready += (int) chan[i]->oldpack_ready;
+	    npacks_ready += (int) chan[i]->pack_ready;
+	    
+	    if( arg.o.verbose ){ 
+	      printf("Chan %i old packet ready to combine: %i\n", i, chan[i]->oldpack_ready);
+	      printf("Chan %i new packet ready to combine: %i\n", i, chan[i]->pack_ready);
+	    }
+	  }
+	  //	  if( parser->do_chans >= 2 ){
+	  //	    uint16_t *cbuff = combbuff; //use this because combine_and_write_chandata_buff increments cbuff pointer
+	  count = 0;
+	  if( npacks_ready == 2 ) {
+	      
+	    if( parser->do_chans == 3 ){
+	      //		printf("BEFORE new combbuff %llu = %p\n", i, combbuff);
+	      combine_and_write_chandata_buff( chan[0], chan[1], 0, parser, combbuff, &count );
+	      if( count > 0 ) { 
+		if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
+		if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
+		if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
+	      }
+	      //		printf("AFTER new combbuff %llu = %p\n", i, combbuff);
+	    }
+	    for(int i = 0; i < 2; i ++){
+	      if( !arg.o.diag ) write_chan_samples( chan[i], false, parser, true );
+	    }
+	      
+	    if( noldpacks_ready == 2 ){
+	      if( parser->do_chans == 3 ){
+		combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, combbuff, &count );
+		if( count > 0 ) { 
+		  if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
+		  if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
+		  if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
+		}
+	      }
+	      for(int i = 0; i < 2; i ++){
+		if( !arg.o.diag ) write_chan_samples( chan[i], true, parser, true );
+	      }
+	    }
+	    for( int i = 0; i < 2; i++ ) {
+	      clean_chan_buffer( chan[i], true );
+	    }
+	  }
+	  else if( noldpacks_ready == 2 ){
+	    if( parser->do_chans == 3 ){
+	      combine_and_write_chandata_buff( chan[0], chan[1], 1, parser, combbuff, &count ); 
+	      if( count > 0 ) { 
+		if( !arg.o.diag ) fwrite((void *)combbuff, 2, count, ofile);
+		if( arg.o.dt > 0 ) fifo_write( fifo, (char *)combbuff, count * 2 );
+		if( arg.o.verbose ) printf("Writing %li combined samples to file\n", count);
+	      }
+	    }
+	    for(int i = 0; i < 2; i ++){
+	      if( !arg.o.diag ) write_chan_samples( chan[i], true, parser, true );
+	      clean_chan_buffer( chan[i], false );
+	    }
+	  }
+	  else {
+	    printf ("Not all channels are prepared to do data combination!\n");
+	  }
+	} //end write chan data
+	else { //just clean up, nothing to write
+	  if( parser->parse_ok ){
+	    for(int i = 0; i < parser->nchans; i++){
+	      update_chans_post_parse( chan[i], tcp_hdr, parser, buff ); //get new packet stuff, if applicable
+	      print_chan_info( chan[i] ); 	    //tell me about it
+	      clean_chan_buffer( chan[i] , chan[i]->pack_ready );
+	    }
+	  }
+	}
+      } //end do_chans
+    
+      update_end_of_loop(parser, buff, tcp_hdr);       //new bufpos, packetpos happens here
+      
+    } //end of current buffer
+
+
+    //Update all stuff outside last buffer
+    parser->oldhpos -= parser->bufrem;
+    parser->total += bufcount;
+    printf("Read %li bytes so far\n", parser->total);
+    
+    if(parser->strip_packet){
+      parser->deltotal += parser->delbytes;
+      printf("Killed %li bytes so far\n",parser->deltotal);
+    }
+    parser->hprediction -= parser->bufrem;
+
+    //    printf("Writing %li bytes to %s\n",parser->bufrem, ostr);
+    if( arg.o.runmode != 6 ){
+      printf("Writing %li bytes\n", parser->bufrem );
+      if( !arg.o.diag ) count = fwrite(buff, 1, parser->bufrem, ofile);
+      if( arg.o.dt > 0 ) fifo_write( fifo, buff, parser->bufrem );
+      if( !arg.o.diag && count == 0 && parser->bufrem != 0 ){
+	printf("Gerrorg writing to %s\n", ostr);
+	*arg.running = false; 
+	arg.retval = EXIT_FAILURE; pthread_exit((void *) &arg.retval);
+      }
+      parser->wcount += count;
+    }
+    /* else { //We're in combine chan mode */
+    /*   //      count = fwrite(combbuff, 1,  */
+    /*   printf("kick it\n"); //fseek(ofile, -numread, SEEK_END); */
+    /* } */
+
+    //write rtd stuff
+    gettimeofday(&then, NULL);
+
+    // Copy into RTD memory if we're running the display
+    if (arg.o.dt > 0) {
+      
+      if( !arg.o.digitizer_data ) {
+	if( fifo_avail(fifo) > 2*rtdbytes ) {
+	  if( (fifo_loc = fifo_search(fifo, 2*rtdbytes, fifo_srch, 16 ) ) != EXIT_FAILURE ) {
+	    
+	    fifo_kill(fifo, fifo_loc);
+	    fifo_read(fifo_outbytes, fifo, rtdbytes);
+	    
+	    pthread_mutex_lock(arg.rlock);
+	    
+	    if (arg.o.debug) {
+	      printf("Port %u rtd moving rtdbytes %i from cfb %p to rtdb %p with %lu avail.\n",
+		     arg.port, rtdbytes, buff, arg.rtdframe, count);
+	    }
+	    memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
+	    pthread_mutex_unlock(arg.rlock);
+	  }
+	  else {
+	    fprintf(stderr,"Search for \"aDtromtu hoCllge\" failed!!\nNo rtd output...\n");
+	    fprintf(stderr,"Total bytes read so far:\t%lli\n",wcount);
+	  }
+	} 
+      } 
+      else { //it IS digitizer data
+	if( fifo_avail(fifo) >= rtdbytes ) {
+	  //read it
+	  fifo_read(fifo_outbytes, fifo, rtdbytes);
+
+	  pthread_mutex_lock(arg.rlock);
+	  if (arg.o.debug) {
+	    printf("Port %i rtd moving rtdbytes %i from cfb %p to rtdb %p with %li avail.\n",
+		   arg.port, rtdbytes, buff, arg.rtdframe, fifo_avail(fifo) );
+	  }
 	  memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
 	  pthread_mutex_unlock(arg.rlock);
-
-	}
-	else {
-	  fprintf(stderr,"Search for \"aDtromtu hoCllge\" failed!!\nNo rtd output...\n");
-	  fprintf(stderr,"Total bytes read so far:\t%lli\n",wcount);
-	}
-      } 
-	  
+	}	  	
+      }
     }
 	
     frames++;
@@ -681,20 +829,20 @@ void *tcp_player_data_pt(void *threadarg) {
     if ((arg.o.maxacq > 0) && (frames > arg.o.maxacq)) {
       *arg.running = false;
     }
-    
   }
     
   gettimeofday(&now, NULL);
     
   /* Close the file */
-  
   if ( (arg.retval = fclose(ofile) ) != 0) {
     printe("Couldn't close file %s!\n", ostr);
   }
+
+  //print stats
+  print_stats(parser);
     
   telapsed = now.tv_sec-start.tv_sec + 1E-6*(now.tv_usec-start.tv_usec);
-    
-  printf("Read %lli bytes from port %u in %.4f s: %.4f KBps.\n", wcount, arg.port, telapsed, (wcount/1024.0)/telapsed);
+  printf("Read %li bytes from port %u in %.4f s: %.4f KBps.\n", parser->wcount, arg.port, telapsed, (parser->wcount/1024.0)/telapsed);
 
   printf("OK!\n");
   close(nsockfd);
