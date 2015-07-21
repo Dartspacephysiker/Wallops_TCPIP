@@ -12,10 +12,10 @@ DIAG=""
 
 
 OUTDIR="/home/spencerh/data/CAPER/Andoya/cals/TM1"
-FILE_PREFIX="test_new_rtd"
+FILE_PREFIX="Y2--Input_test--Direct"
 
 print_defaults () {
-    echo "${0} <CHANNEL NAME> <MODE> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})>"
+    echo "${0} <MODE> <CHANNEL NAME> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})>"
     echo ""
     echo -e "MODES"
     echo -e "====="
@@ -68,7 +68,7 @@ telnet_stop () {
 }
 
 #Which channels to look at?
-case $1 in
+case $2 in
     "VLFA" | "VLF" ) 
 	MSBCH="26"; LSBCH="27";
 	echo "Selected VLFA...";   
@@ -83,19 +83,19 @@ case $1 in
 	ACQSZ=16384;
 	RTD="VLFB";
         RTDSZ="2048";;
-    "VLFA-AGC" | "VLF-AGCA" | "VLFAGC" | "VLF-AGC" ) 
+    "VLFA-AGC" | "VLF-AGCA" | "VLFAGC" | "VLF-AGC" | "VLFAGCA" | "VLFAAGC" ) 
 	MSBCH="30"; LSBCH="31";
 	echo "Selected VLFA-AGC...";
 	PORT=5030;
 	ACQSZ=16384;
-	RTD="VLFAGC";
+	RTD="VLFAGCA";
         RTDSZ="2048";;
-    "VLFB-AGC" | "VLF-AGCB" )
+    "VLFB-AGC" | "VLF-AGCB" | "VLFAGCB" | "VLFBAGC" )
 	MSBCH="32"; LSBCH="33";
 	echo "Selected VLFB-AGC...";
 	PORT=5032;
 	ACQSZ=16384;
-	RTD="VLFAGC";
+	RTD="VLFAGCB";
         RTDSZ="2048";;
     "VF-ALO" | "VFALO" ) 
 	MSBCH="34"; LSBCH="35";
@@ -217,7 +217,7 @@ case $1 in
 	exit;;
 esac
 
-case $2 in
+case $1 in
     "0" )
 	telnet_stop;;
     "1" )
@@ -227,7 +227,7 @@ case $2 in
 	/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} ${ACQ_SLEEP} & telnet_start;;
     "3" )
 	echo "/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P \"TM1_${RTD}${FILE_PREFIX}\" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} & telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD}";	
-	/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} ${ACQ_SLEEP} & telnet_start & /usr/src/prtd/rtd_TM1_script.sh 1 tcp${RTD} ${RTD};;
+	/usr/src/Wallops_TCPIP/tcp_player -p ${PORT} -P "TM1_${RTD}${FILE_PREFIX}" -g -r 6 -A ${ACQSZ} -R ${RTDSZ} -d 1 -m /tmp/rtd/rtd_tcp${RTD}.data -o ${OUTDIR} ${DIAG} ${ACQ_SLEEP} & telnet_start & /usr/src/prtd/rtd_script.sh 1 tcp${RTD} ;;
     * )
 	echo -e "Invalid mode/no mode given!\n";
 	print_defaults;;
