@@ -3,12 +3,21 @@
 PORT=${5:-5003}
 
 
-TM2="192.168.2.202"
+#TM2="192.168.2.202"
+TM2="192.168.1.80"
 TM2_CH="6"
 TM2_PORT=${PORT}
-TM3="192.168.2.203"
+
+#If we ever get them running on a single unit, use these
+#TM3_CH="14"
+#TM3="192.168.1.80"
+
+#...But for now, use these
 TM3_CH="7"
+TM3="192.168.1.24"
+
 TM3_PORT=$((PORT + 1))
+
 TMPORT="8999"
 SLEEP="2"
 ACQTIME=${3:-45}

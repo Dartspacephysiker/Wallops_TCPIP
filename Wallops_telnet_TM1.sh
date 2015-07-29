@@ -1,7 +1,8 @@
 #!/usr/bin/bash
 
 
-TM1="192.168.2.201"
+#TM1="192.168.2.201"
+TM1="192.168.1.146"
 TM1PORT="8999"
 PORT=${5:-5010}
 SLEEP="2"
@@ -11,11 +12,11 @@ DIAG=""
 [ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
 
 
-OUTDIR="/home/spencerh/data/CAPER/Andoya/cals/TM1"
-FILE_PREFIX="Y2--Input_test--Direct"
+OUTDIR="/home/spencerh/data/CAPER/Wallops/2015/cals/TM1/"
+FILE_PREFIX=${6:-"TM1_testme"}
 
 print_defaults () {
-    echo "${0} <MODE> <CHANNEL NAME> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})>"
+    echo "${0} <MODE> <CHANNEL NAME> <ACQUISITION TIME: (default:${ACQTIME} s)> <DIAGNOSTIC (no acq)> <PORT (default: ${PORT})> <FILE PREFIX (default: ${FILE_PREFIX})"
     echo ""
     echo -e "MODES"
     echo -e "====="
