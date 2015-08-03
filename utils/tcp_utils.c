@@ -121,6 +121,10 @@ struct dewe_chan *chan_init(int chan_num, int dtype, bool is_asynchr, bool is_si
     c->num_received = 0;
     c->pack_ready = false;
 
+    //for keeping track of numbers of samples corresponding to this channel
+    c->tot_numsamps = 0;
+
+
     if(is_asynchr){
       c->is_asynchr = true;
       //      c->timestamps = malloc( MAXNUMSAMPS * 8); //Accommodate 64-bit timestamps
@@ -182,6 +186,7 @@ struct tcp_parser *parser_init(void){
   p->delbytes = 0;
   p->deltotal = 0;
   p->total = 0;
+  p->totsampcount = 0;
 
   p->parse_ok = false;
 
@@ -212,6 +217,47 @@ struct tcp_parser *parser_init(void){
   p->header_addr = NULL;
   p->tail_addr = NULL;
 
+  p->verbose = false;
+  
+  return p;
+
+}
+
+struct tcp_parser_hs *parser_init_hs(void)
+{
+
+  if( DEBUG ) printf("tcp_utils.c [parser_init_hs()]\n");
+
+  //  p = malloc( sizeof(struct tcp_parser) );
+  struct tcp_parser_hs *p;
+  p = malloc( sizeof(struct tcp_parser_hs));
+
+  p->numpackets = 0;
+  p->num_badp = 0;
+
+  p->filesize = 0;
+  p->wcount = 0;
+
+  p->hdrsz = 0;
+  for(int i = 0; i < STARTSTR_SZ; i++){
+    p->startstr[i] = '0';
+  }
+  p->startstr_sz = 0;
+  for(int i = 0; i < STARTSTR_SZ; i++){
+    p->tlstr[i] = '0';
+  }
+  p->tailsz = 0;
+
+  p->header_addr = NULL;
+  p->hpos = 0;
+  p->bufcount = 0;
+  p->bufpos = 0;
+
+  p->nchans = 0;
+
+  p->totsampcount = 0;
+
+  p->parse_ok = false;
   p->verbose = false;
   
   return p;
@@ -273,6 +319,68 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *t
 
     p-> numpackets +=1;
     p->hc += 1;
+    p->parse_ok = true;
+    
+  }
+  else { 
+    
+    p->parse_ok = false;
+    
+    return EXIT_FAILURE;
+
+  }
+  
+  return EXIT_SUCCESS;
+}
+
+bool parse_tcp_header_hs(struct tcp_parser_hs *p, char *buf_addr, struct tcp_header *th) {
+
+  if( DEBUG ) printf("tcp_utils.c [parse_tcp_header_hs()]\n");
+
+  //Look for header beginning at the current buffer position
+  p->header_addr = memmem(buf_addr + p->bufpos, p->bufcount - p->bufpos, p->startstr, p->startstr_sz );
+
+  if(p->header_addr != NULL) {     //get new header
+
+    //start string
+    memcpy(&th->start_str, p->header_addr, sizeof(th->start_str));
+
+    //packet size
+    memcpy(&th->pack_sz, (void *)((long int)p->header_addr + sizeof(th->start_str)),
+	   sizeof(th->pack_sz));
+
+    //packet type
+    memcpy(&th->pack_type, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz)), 
+	   sizeof(th->pack_type));
+    
+    //packet number of samples
+    memcpy(&th->pack_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type)),
+	   sizeof(th->pack_numsamps));
+
+    //total samples
+    memcpy(&th->pack_totalsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps)),
+	   sizeof(th->pack_totalsamps));
+
+    //packet time
+    memcpy(&th->pack_time, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps)),
+	   sizeof(th->pack_time));
+
+    //sync number of channels
+    memcpy(&th->sync_numsamps, 
+	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
+		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) +
+		    sizeof(th->pack_time)),
+	   sizeof(th->sync_numsamps));
+
+
+    p-> numpackets +=1;
     p->parse_ok = true;
     
   }
@@ -621,6 +729,37 @@ int post_strip(struct tcp_parser *p, char *buf_addr, struct tcp_header *th){
 /***************/
 /*CHAN ROUTINES*/
 /***************/
+//2015/08/03
+//I started making this routine before realizing that I just wanted to write tcp_player_highspeed. I think it's junk.
+/* bool get_num_samps_in_chan( struct dewe_chan *c, struct tcp_header *th, struct tcp_parser *p, char *buf_addr, long int *ptmp_buf_pos ){ */
+
+/*   //variable to decide if we do another channel */
+/*   bool next; */
+/*   next = false; */
+  
+/*   if( DEBUG ) printf("tcp_utils.c [get_num_samps_in_chan()]\n"); */
+    
+/*   //now we just sift through this danged thing! */
+/*   c->oldnumsamps = c->numsamps; */
+/*   c->numsamps = *((int32_t *)(buf_addr+*ptmp_buf_pos)); */
+/*   c->tot_numsamps += c->numsamps; */
+  
+/*   printf("tcp_utils.c [get_num_samps_in_chan()] CH%i num samples: %i\n", c->num, ); */
+
+/*   *ptmp_buf_pos += c->numsamps * c->dsize; */
+
+/*   //move ahead of tstamp bytes if this chan is asynchronous */
+/*   if( c->is_asynchr ) { */
+/*     *ptmp_buf_pos += c->numsamps * 8; */
+/*   } */
+
+/*   if( ( p->bufrem - *ptmp_buf_pos ) < 0 ) { next = false; } */
+/*   else { next = true; } */
+
+/*   return next; */
+  
+/* } */
+
 int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct tcp_parser *p, char *buf_addr ){
 
   //NOTE, THIS WHOLE ROUTINE IS CONTIGENT UPON PARSE_OK
@@ -637,9 +776,23 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
 
   //This is a new packet, after all
   c->packaddr = c->oldpackaddr + c->oldnumsampbytes;  //packaddr is always oldnumsamps ahead of oldpackaddr
-  c->numsampbytes = th->sync_numsamps *  c->dsize;
-  c->numbytes_received = 0;
+
+  //get number of samples for this channel
+  //  
+  //  if( c->num == 0 ) {
   c->numsamps = th->sync_numsamps;
+  c->tot_numsamps += th->sync_numsamps;
+  //}
+  //else {
+  //  //this is bogus, but I don't know another solution right now
+  //  c->numsamps = th->sync_numsamps;
+  //  if ( chanheader_is_in_this_buff ) {
+  //    c->numsamps =  *((int32_t *)(buf_addr+p->bufpos));
+  //  }
+  // }
+  c->numsampbytes = c->numsamps *  c->dsize;
+  c->numbytes_received = 0;
+
   c->num_received = 0;  
   c->pack_ready = false;
 
@@ -648,7 +801,7 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
     c->oldtbytes_received = c->tbytes_received;
     c->oldtstamps_addr = c->tstamps_addr;
 
-    c->numtbytes = th->sync_numsamps * 8;
+    c->numtbytes = c->numsamps * 8;
     c->tbytes_received = 0;
     c->tstamps_addr = c->oldtstamps_addr + c->oldnumtbytes;
     //    c->tstamps_addr = c->oldpackaddr + ( c->oldnumsamps * 8 ); //THIS WAS WRONG IN ANY CASE
@@ -679,6 +832,7 @@ int get_chan_samples( struct dewe_chan *c, char *buf_addr, struct tcp_parser * p
 
     if( totoldbytesrem != 0 ){   //handle_previous_chansamps      
       if( c->oldnumbytes_received == 0 ){ //we're sitting on a gold mine; should be numsamps right here
+	//	c->numsamps = *((int32_t *)(buf_addr+p->bufpos)))
 	if( DEBUG ){
 	  printf("tcp_utils.c [get_chan_samples()] CH %i Oldnumsamps according to oldparse:\t%i\n", 
 		 c->num, c->oldnumsamps);
@@ -1317,6 +1471,26 @@ void print_stats(struct tcp_parser *p){
     if( p->do_chans == 3 ) printf("Number of packets combined:\t%i\n", p->npacks_combined );
     printf("\n");
   }
+
+  printf("\n*************************\n\n");
+  
+  
+}
+
+void print_stats_hs(struct tcp_parser_hs *p){
+
+  printf("\n\n**********STATS**********\n\n");
+
+  printf("Number of packets read:\t%u\n",p->numpackets);
+  printf("\n");
+  printf("Incorrect header predictions:\t%u\n",p->num_badp);
+  printf("\n");
+  printf("Total bytes read: %li\n",p->total);
+  printf("Actual file size: %li\n",p->filesize);
+
+  printf("Number of channels:\t%i\n", p->nchans);
+
+  printf("\n");
 
   printf("\n*************************\n\n");
   

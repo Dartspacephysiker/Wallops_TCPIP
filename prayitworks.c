@@ -39,7 +39,7 @@
 #define EEPP_FILE 8
 #define EEPP_THREAD 9
 #define MIN_BYTES_READ 100
-#define BACKLOG 10
+#define TCP_BACKLOG 10
 
 static bool running = true;
 
@@ -373,7 +373,7 @@ void *tcp_player_data_pt(void *threadarg) {
 
   /* Listen remote connect/calling */
   sin_size = sizeof(struct sockaddr_in);  
-  if(listen(sockfd,BACKLOG) == -1)
+  if(listen(sockfd,TCP_BACKLOG) == -1)
     {
       printf ("ERROR: Failed to listen Port %d.\n", arg.port);
       *arg.running = false;

@@ -5,6 +5,7 @@
  *      Author: wibble
  *
  *  Jun 2, 2014, SMH: I've here completely ripped off MPD's qusb_acq
+ *  Aug 3, 2015, SMH: Creating new, high-speed version of tcp_player
  */
 
 #ifndef DEFAULTS_H_
@@ -15,13 +16,18 @@
 #define DEF_PORT 5000 //Default TCP port
 
 #define DEF_PREFIX "tcp_data"
-#define DEF_OUTDIR "/home/spencerh/data/Wallops_TCPdata"
+#define DEF_OUTDIR "/home/spencerh/data/CAPER/Wallops_TCPdata"
 #define DEF_SLEEPTIME 0
 
-#define DEF_CFSIZE 65536 // Colonel Frame size, words
+#define DEF_HS_REVBUFSIZE 5248000 //TCP data max receive size for highspeedversion
+#define DEF_HS_PREFIX "tcp_data_highspeed"
+#define DEF_HS_IS_ASYNCHR_CHAN true
+
+//More relics from Micah's qusb_acq?
+//#define DEF_CFSIZE 65536 // Colonel Frame size, words
 // #define DEF_CFHEAD "Dartmouth College "
 /* Accommodate the weirdness right now */
-#define DEF_CFHEAD "Dartmouth College"
+//#define DEF_CFHEAD "Dartmouth College"
 
 #define DEF_DIGITDATA false //Digitizer data
 #define DEF_RTDSIZE 65536 // RTD Output size, words
@@ -37,6 +43,6 @@
 #define DEF_NUMCHANS 2
 #define MAX_NUMCHANS 2
 
-//#defin MAXNUMSAMPS
+//#define MAXNUMSAMPS
 
 #endif /* DEFAULTS_H_ */

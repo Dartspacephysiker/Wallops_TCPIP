@@ -14,7 +14,7 @@
 #include <math.h>
 
 #define STARTSTR_SZ 8
-#define MAXNUMSAMPS 100000 //should be more than enough
+#define MAXNUMSAMPS 300000 //should be more than enough
 
 /* This one is for pulling in PCM data, the structure of which 
  * (at least for a single synchronous PCM channel coming from the DEWESoft 
@@ -78,16 +78,20 @@ struct tcp_parser {
   long int hpos; //position of header relative to current buffer startpoint
   long int tpos; //position of tail relative to current buffer startpoint
 
-  long int packetpos; //position within current packet EXCLUDING HEADER AND FOOTER, where "0" is t
+  long int packetpos; //position within current packet EXCLUDING HEADER AND FOOTER, where "0" is the beginning of the packet
   long int bufpos; //position of reading in current buffer of data, where "0" is the beginning of the buffer
   long int bufrem;
   long int delbytes;
   long int deltotal;
   long int total;
+  long int totsampcount;
 
   bool parse_ok;
 
-  char do_chans; // if 1, just parse chan info; 2, write chandata OUT; 3, combine two chans with join_upper10_lower6
+  char do_chans; // if 1, just parse chan info;
+                 //    2, write chandata OUT;
+                 //    3, combine two chans with join_upper10_lower6;
+                 //    4, discard all timestamps except the one corresponding to the Dartmouth RxDSP header
   int nchans;
   int npacks_combined; //keep track of number of packets successfully combined
 
@@ -116,6 +120,35 @@ struct tcp_parser {
   long int *header_addr; //Use tail_addr and header_addr if header & footer are separate for some reason
   long int *tail_addr; 
 
+  bool verbose;
+};
+
+struct tcp_parser_hs {
+
+  int numpackets;
+  unsigned int num_badp;
+
+  long int filesize;
+  long int wcount;
+
+  int hdrsz; //size of header
+  char startstr[8];
+  int startstr_sz;
+  char tlstr[8];
+  int tailsz; //size of footer  
+
+  //For navigating the received packet
+  long int *header_addr; //We need something to be able to find the header
+  long int hpos;
+  long int bufcount;
+  long int bufpos; //position of reading in current buffer of data, where "0" is the be
+  long int total;
+
+  int nchans;
+
+  long int totsampcount;
+  
+  bool parse_ok;
   bool verbose;
 };
 
@@ -172,6 +205,8 @@ struct dewe_chan {
   int32_t numsamps; //number of samples contained in newly parsed packet
   int32_t num_received; //number of samples currently held in buffer from a newly parsed packet
   bool pack_ready;
+
+  int32_t tot_numsamps;
 
   //for async channels
   bool is_asynchr;
@@ -232,5 +267,18 @@ int update_end_of_loop(struct tcp_parser *, char *, struct tcp_header *);
 void print_stats(struct tcp_parser *);
 void free_parser(struct tcp_parser *);
 void free_chan(struct dewe_chan *);
+
+/*
+ * High-speed routines!
+ */
+struct tcp_parser_hs * parser_init_hs(void);
+bool parse_tcp_header_hs(struct tcp_parser_hs *, char *, struct tcp_header *);
+void print_stats_hs(struct tcp_parser_hs *);
+void free_parser_hs(struct tcp_parser_hs *);
+
+
+//print routines
+//int print_tcp_hs_header(struct tcp_header *);
+
 
 #endif /* TCP_UTILS_H_ */

@@ -5,10 +5,12 @@ PORT=${4:-5003}
 
 TM2="192.168.1.80"
 TM2_CH="6"
+#TM2_CH="4"  #Major frame counter, TM2
 TM2_PORT=${PORT}
 
 #If we ever get them running on a single unit, use these
-TM3_CH="14"
+TM3_CH="15"
+#TM3_CH="12"    #Major frame counter, TM3
 TM3="192.168.1.80"
 
 #...But for now, use these
@@ -26,7 +28,6 @@ ACQTIME=${2:-45}
 #DIAG=""
 #Diagnostic mode
 #[ -n "${4}" ] && DIAG="-D" && echo -e "Diagnostic mode...\n";
-
 
 
 #OUTDIR="/home/spencerh/data/CAPER/Wallops/vibe/RxDSP"
@@ -96,34 +97,6 @@ RxDSP_stop () {
 	echo "exit"; sleep ${SLEEP};
     } | tee >(telnet ${1} ${TMPORT});
 }
-
-# case $1 in
-#     "1" | "TM2" | "Master" | "MASTER" | "master" | "m" ) 
-# 	TM=${TM2}
-# 	CH=${TM2_CH};
-# 	PORT=${4-"5003"};
-# 	ACQSZ=262244;
-# 	RTD="tcpRxDSP";
-#         RTDSZ=65536;
-# 	echo "Selected Master RxDSP...";; 
-#     "2" | "TM3" | "Slave" | "SLAVE" | "slave" | "s" ) 
-# 	TM=${TM3}
-# 	CH=${TM3_CH};
-# 	PORT=${4:-"5004"};
-# 	ACQSZ=262244;
-# 	RTD="tcpRxDSP";
-#         RTDSZ=65536;
-# 	echo "Selected Slave RxDSP...";; 
-#     "all" | "ALL" | "BOTH" )
-# 	echo "Biz";;
-#     "-h" | "--help" )
-# 	print_defaults;
-# 	exit;;
-#     * )
-# 	echo -e "Invalid RxDSP/no RxDSP specified!\n"
-# 	print_defaults;
-# 	exit;;
-# esac
 
 case $1 in
 #    "0" )

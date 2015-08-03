@@ -11,7 +11,7 @@ Ripped from 'http://stackoverflow.com/questions/10686368/file-transfer-using-tcp
 #include <unistd.h>
 
 #define DEF_PORT 5000 //default port num on which to listen
-#define BACKLOG 10
+#define TCP_BACKLOG 10
 #define LENGTH 65536 // Buffer length
 int main (int argc, char * argv[])
 {
@@ -78,7 +78,7 @@ int main (int argc, char * argv[])
   else printf("[server] bind tcp port %d in addr 0.0.0.0 sucessfully.\n",port);
 
   /* Listen remote connect/calling */
-  if(listen(sockfd,BACKLOG) == -1)
+  if(listen(sockfd,TCP_BACKLOG) == -1)
     {
       printf ("ERROR: Failed to listen Port %d.\n", port);
       return (0);

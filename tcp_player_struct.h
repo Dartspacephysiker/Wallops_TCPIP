@@ -10,8 +10,6 @@
 #ifndef EPP_STRUCT_H_
 #define EPP_STRUCT_H_
 
-//#include <float.h>
-//#include <math.h>
 #include "defaults.h"
 
 
@@ -21,7 +19,10 @@ struct player_opt {
   int maxacq;
   unsigned int ports[MAXPORTS];
   int num_ports;
+
   int nchan;
+  bool chans_asynchr;
+  
   char *prefix;
   char *outdir;
   unsigned int sleeptime;
@@ -37,14 +38,6 @@ struct player_opt {
   bool debug;
   bool verbose;
   bool diag;
-};
-
-/* colonel frame structure */
-struct colonel_frame {
-  long int size;
-  char *base;
-  char *tail;
-  unsigned int port;
 };
 
 struct tcp_player_ptargs {
@@ -98,17 +91,17 @@ union rtd_h_union {
 
 /*
  * Define frame sync structure.  Pragma compiler directives
- * ensure this structure is properly-sized.
+ * ensure this structure is properly sized.
  */
-#pragma pack(push,2)
+/* #pragma pack(push,2) */
 
-struct frame_sync {
-  char pattern[4];
-  uint32_t t_sec;
-  uint32_t t_usec;
-  uint32_t size;
-};
+/* struct frame_sync { */
+/*   char pattern[4]; */
+/*   uint32_t t_sec; */
+/*   uint32_t t_usec; */
+/*   uint32_t size; */
+/* }; */
 
-#pragma pack(pop)
+/* #pragma pack(pop) */
 
 #endif /* EPP_STRUCT_H_ */

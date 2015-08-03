@@ -12,5 +12,7 @@ search_tcpipdata*
 
 # executables
 tcp_player
+tcp_player_highspeed
 tcp_fileparse
+tcp_fileparse_v2
 utils/tcp_tstamp_to_ascii

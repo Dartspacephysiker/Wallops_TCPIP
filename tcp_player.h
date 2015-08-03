@@ -12,9 +12,7 @@
 #include "tcp_player_struct.h"
 
 void tcp_play(struct player_opt);
-void check_acq_seq(int, bool *);
 static void do_depart(int);
 void *tcp_player_data_pt(void *);
-
 
 #endif /* EPP_ACQ_H_ */

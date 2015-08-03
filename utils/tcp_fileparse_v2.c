@@ -275,13 +275,12 @@ int main(int argc, char **argv)
     while(  parser->bufpos < parser->bufrem ){
 
       if(parser->strip_packet) { usleep(4000); }
-	else { usleep(6000); }
+      else { usleep(6000); }
 
       parse_tcp_header(parser, buff, tcp_hdr);       //get new header_addr here
 
       update_after_parse_header(parser, buff, tcp_hdr);       //new hpos, bufpos, packetpos, if applicable 
 
-    
       if( parser->parse_ok ){
 	
 	printf("*****Packet #%u*****\n",parser->numpackets);
@@ -332,9 +331,23 @@ int main(int argc, char **argv)
       if( parser->do_chans ){
 
       	bool moresamps = true;      
-      	long int tmp_buf_pos = parser->bufpos;
+      	long int tmp_buf_pos = parser->bufpos + parser->hdrsz - sizeof(th->sync_numsamps);  //we need to move to the actual end of the DEWESoft header,
+                                                                                            // and begin at the location of the first channel header
 
-  	if( parser->parse_ok ){
+  	if( parser->parse_ok ){ //If we just got a new packet header, then we can at least get the number of samples for chan 0
+
+	  //get number of samples in each channel, if possible--update numsamps and oldnumsamps for each channel
+	  bool again = true;
+	  for(int i = 0; i < parser->nchans; i++){
+	    if( again ) {
+	      again = get_num_samps_in_chan( chan[i], tcp_hdr, parser, buff, &tmp_buf_pos );
+	    }
+	    else { //Handle the situation where the number of samples for this channel are actually BEHIND the new header
+	       
+	    }
+	  }
+	  
+	  //since this is a new packet, we need to make sure to update all channel stuff for ALL channels, even if we don't know the new number of samples yet
 
 	  //get new packet stuff, if applicable
 	  for(int i = 0; i < parser->nchans; i++){
