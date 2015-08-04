@@ -1,5 +1,7 @@
 CC = gcc
 
+#CFLAGS = -fPIC -Wall -std=gnu99 -Iutils/ -g
+#LDFLAGS = -pipe -Wall -lm -pthread -g
 CFLAGS = -fPIC -Wall -std=gnu99 -Iutils/ -O2
 LDFLAGS = -pipe -Wall -lm -pthread -O2
 

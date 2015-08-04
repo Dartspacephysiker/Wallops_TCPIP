@@ -11,8 +11,6 @@
 
 #include "tcp_player_struct.h"
 
-/* FILL ME IN HERE WITH FUNCTION NAMES ONCE WE KNOW WHAT THEY'LL BE */
-
 void tcp_play_hs(struct player_opt);
 void *tcp_play_hs_data_pt(void *);
 

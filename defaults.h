@@ -18,16 +18,11 @@
 #define DEF_PREFIX "tcp_data"
 #define DEF_OUTDIR "/home/spencerh/data/CAPER/Wallops_TCPdata"
 #define DEF_SLEEPTIME 0
+#define DEF_SLEEPTIME_HS 500
 
-#define DEF_HS_REVBUFSIZE 5248000 //TCP data max receive size for highspeedversion
+#define DEF_HS_REVBUFSIZE 1312000 //TCP data max receive size for highspeedversion
 #define DEF_HS_PREFIX "tcp_data_highspeed"
-#define DEF_HS_IS_ASYNCHR_CHAN true
-
-//More relics from Micah's qusb_acq?
-//#define DEF_CFSIZE 65536 // Colonel Frame size, words
-// #define DEF_CFHEAD "Dartmouth College "
-/* Accommodate the weirdness right now */
-//#define DEF_CFHEAD "Dartmouth College"
+#define DEF_HS_IS_SYNCHR_CHAN false
 
 #define DEF_DIGITDATA false //Digitizer data
 #define DEF_RTDSIZE 65536 // RTD Output size, words

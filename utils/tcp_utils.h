@@ -43,11 +43,11 @@
 /*   uint64_t pack_totalsamps; //number of samples acquired so far */
 /*   double pack_time; // as given above */
 
-/*   uint32_t sync_numsamps; */
+/*   uint32_t chan0_numsamps; */
 
 /* }; */
 
-//The tcp_header.sync_numsamps variable should be the same for every channel present, but I haven't
+//The tcp_header.chan0_numsamps variable should be the same for every channel present, but I haven't
 //verified that! In specific, it might be possible for ch0 to pull in, e.g., 8000 samps and ch1 only 7092.
 struct tcp_header {
 
@@ -57,7 +57,7 @@ struct tcp_header {
   int32_t pack_numsamps; //number of synchronous samples per channel   //(there should only be one channel)
   int64_t pack_totalsamps; //number of samples acquired so far
   double pack_time; // as given above
-  int32_t sync_numsamps;
+  int32_t chan0_numsamps;
 
 };
 
@@ -152,19 +152,6 @@ struct tcp_parser_hs {
   bool verbose;
 };
 
-/*According to the DEWESoft NET interface documentation, a TCP packet may have multiple channels and 
- *may be either synchronous or asynchronous. Those channels can each have their own data type, which are
- *0 - 8-bit unsigned int "uchar" or "uint8_t"
- *1 - 8-bit signed int "char" or "int8_t"
- *2 - 16-bit unsigned int "uint" or "uint16_t" 
- *3 - 16-bit signed int "int" or "int16_t"
- *4 - 32-bit signed int "long int" or "int32_t"
- *5 - Single floating point (32-bit) "float"
- *6 - 64-bit signed int "long long int" or "int64_t"
- *7 - Double floating point (64-bit) "double" or "double_t"
- */
-static uint8_t chan_data_size[8] = { 1, 1, 2, 2, 4, 4, 8, 8 }; //indexes the sizes of data types above
-
 struct dewe_chan {
 
   uint8_t num;
@@ -236,7 +223,7 @@ struct tcp_parser * parser_init(void);
 
 //parse routines
 bool parse_tcp_header(struct tcp_parser *, char *, struct tcp_header *);
-int update_after_parse_header(struct tcp_parser *p, char * buf_addr, struct tcp_header *header);
+int update_after_parse_header(struct tcp_parser *, char *, struct tcp_header *);
 
 //print routines
 int print_tcp_header(struct tcp_header *);
@@ -273,6 +260,8 @@ void free_chan(struct dewe_chan *);
  */
 struct tcp_parser_hs * parser_init_hs(void);
 bool parse_tcp_header_hs(struct tcp_parser_hs *, char *, struct tcp_header *);
+int write_chan_samples_hs(struct dewe_chan *, struct tcp_parser_hs *, bool);
+int write_tstamp_samples_hs(struct dewe_chan *, struct tcp_parser_hs *, bool);
 void print_stats_hs(struct tcp_parser_hs *);
 void free_parser_hs(struct tcp_parser_hs *);
 

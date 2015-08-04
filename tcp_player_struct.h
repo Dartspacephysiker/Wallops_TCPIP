@@ -21,7 +21,7 @@ struct player_opt {
   int num_ports;
 
   int nchan;
-  bool chans_asynchr;
+  bool chans_are_synchr;
   
   char *prefix;
   char *outdir;
@@ -43,13 +43,13 @@ struct player_opt {
 struct tcp_player_ptargs {
   struct player_opt o;
 
-  time_t time;
+  time_t time[MAX_NUMCHANS];
   bool *running;
   int retval;
   unsigned int port;
 
-  short int *rtdframe;
-  pthread_mutex_t *rlock;
+  short int *rtdframe[MAX_NUMCHANS];
+  pthread_mutex_t *rlock[MAX_NUMCHANS];
 };
 
 /* define the header structure for monitor file */
@@ -88,20 +88,5 @@ union rtd_h_union {
   struct header_info cprtd;
   struct prtd_header_info prtd;
 };
-
-/*
- * Define frame sync structure.  Pragma compiler directives
- * ensure this structure is properly sized.
- */
-/* #pragma pack(push,2) */
-
-/* struct frame_sync { */
-/*   char pattern[4]; */
-/*   uint32_t t_sec; */
-/*   uint32_t t_usec; */
-/*   uint32_t size; */
-/* }; */
-
-/* #pragma pack(pop) */
 
 #endif /* EPP_STRUCT_H_ */

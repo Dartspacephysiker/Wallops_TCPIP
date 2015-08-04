@@ -288,7 +288,7 @@ int main(int argc, char **argv)
 	print_tcp_header(tcp_hdr);
 
 	// Kluge stuff--total num samps
-	parser->totsampcount += tcp_hdr->sync_numsamps;
+	parser->totsampcount += tcp_hdr->chan0_numsamps;
 	printf("Total samples rec'd so far:\t%"PRIi64"\n", parser->totsampcount);
 	//	if( DEF_VERBOSE ) print_raw_tcp_header(tcp_hdr);
 	

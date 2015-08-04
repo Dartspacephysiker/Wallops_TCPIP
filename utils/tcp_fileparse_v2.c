@@ -287,7 +287,7 @@ int main(int argc, char **argv)
 	print_tcp_header(tcp_hdr);
 
 	// Kluge stuff--total num samps
-	parser->totsampcount += tcp_hdr->sync_numsamps;
+	parser->totsampcount += tcp_hdr->chan0_numsamps;
 	printf("Total samples rec'd so far:\t%"PRIi64"\n", parser->totsampcount);
 	//	if( DEF_VERBOSE ) print_raw_tcp_header(tcp_hdr);
 	
@@ -331,7 +331,7 @@ int main(int argc, char **argv)
       if( parser->do_chans ){
 
       	bool moresamps = true;      
-      	long int tmp_buf_pos = parser->bufpos + parser->hdrsz - sizeof(th->sync_numsamps);  //we need to move to the actual end of the DEWESoft header,
+      	long int tmp_buf_pos = parser->bufpos + parser->hdrsz - sizeof(th->chan0_numsamps);  //we need to move to the actual end of the DEWESoft header,
                                                                                             // and begin at the location of the first channel header
 
   	if( parser->parse_ok ){ //If we just got a new packet header, then we can at least get the number of samples for chan 0

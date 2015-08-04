@@ -18,10 +18,23 @@
 
 #include "tcp_utils.h"
 
-#define DEBUG false
-#define DEF_VERBOSE false
+#define DEBUG true
+#define DEF_VERBOSE true
 
 #define USE_CHAN(chan) c->dtype##chan
+
+/*According to the DEWESoft NET interface documentation, a TCP packet may have multiple channels and 
+ *may be either synchronous or asynchronous. Those channels can each have their own data type, which are
+ *0 - 8-bit unsigned int "uchar" or "uint8_t"
+ *1 - 8-bit signed int "char" or "int8_t"
+ *2 - 16-bit unsigned int "uint" or "uint16_t" 
+ *3 - 16-bit signed int "int" or "int16_t"
+ *4 - 32-bit signed int "long int" or "int32_t"
+ *5 - Single floating point (32-bit) "float"
+ *6 - 64-bit signed int "long long int" or "int64_t"
+ *7 - Double floating point (64-bit) "double" or "double_t"
+ */
+static uint8_t chan_data_size[8] = { 1, 1, 2, 2, 4, 4, 8, 8 }; //indexes the sizes of data types above
 
 /****************/
 /*INIT ROUTINES*/
@@ -38,7 +51,7 @@ struct tcp_header *tcp_header_init(void){
   t->pack_totalsamps = 0;
   t->pack_time = 0;
 
-  t->sync_numsamps = 0;
+  t->chan0_numsamps = 0;
 
   return t;
 
@@ -310,11 +323,11 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *t
 	   sizeof(th->pack_time));
 
     //sync number of channels
-    memcpy(&th->sync_numsamps, 
+    memcpy(&th->chan0_numsamps, 
 	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
 		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) +
 		    sizeof(th->pack_time)),
-	   sizeof(th->sync_numsamps));
+	   sizeof(th->chan0_numsamps));
 
 
     p-> numpackets +=1;
@@ -333,12 +346,12 @@ bool parse_tcp_header(struct tcp_parser *p, char *buf_addr, struct tcp_header *t
   return EXIT_SUCCESS;
 }
 
-bool parse_tcp_header_hs(struct tcp_parser_hs *p, char *buf_addr, struct tcp_header *th) {
+bool parse_tcp_header_hs(struct tcp_parser_hs *p, char *hdr_buff, struct tcp_header *th) {
 
   if( DEBUG ) printf("tcp_utils.c [parse_tcp_header_hs()]\n");
 
   //Look for header beginning at the current buffer position
-  p->header_addr = memmem(buf_addr + p->bufpos, p->bufcount - p->bufpos, p->startstr, p->startstr_sz );
+  p->header_addr = memmem(hdr_buff, p->hdrsz, p->startstr, p->startstr_sz );
 
   if(p->header_addr != NULL) {     //get new header
 
@@ -372,12 +385,12 @@ bool parse_tcp_header_hs(struct tcp_parser_hs *p, char *buf_addr, struct tcp_hea
 		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps)),
 	   sizeof(th->pack_time));
 
-    //sync number of channels
-    memcpy(&th->sync_numsamps, 
-	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) + 
-		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) +
-		    sizeof(th->pack_time)),
-	   sizeof(th->sync_numsamps));
+    /* //sync number of channels */
+    /* memcpy(&th->chan0_numsamps,  */
+    /* 	   (void *)((long int)p->header_addr + sizeof(th->start_str) + sizeof(th->pack_sz) +  */
+    /* 		    sizeof(th->pack_type) + sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) + */
+    /* 		    sizeof(th->pack_time)), */
+    /* 	   sizeof(th->chan0_numsamps)); */
 
 
     p-> numpackets +=1;
@@ -386,6 +399,8 @@ bool parse_tcp_header_hs(struct tcp_parser_hs *p, char *buf_addr, struct tcp_hea
   }
   else { 
     
+    if ( DEBUG ) printf("tcp_utils.c [parse_tcp_header_hs()] Didn't find new header!!\n");
+
     p->parse_ok = false;
     
     return EXIT_FAILURE;
@@ -405,14 +420,14 @@ int print_tcp_header(struct tcp_header *th){
     printf("%x",th->start_str[i]);
   }
   printf("\n");
-  printf("Packet size:\t\t\t%"PRIi32"\n", th->pack_sz);
+  printf("Packet size:\t\t\t%"PRIi32" (28 of which are header bytes)\n", th->pack_sz);
   printf("Packet type:\t\t\t%"PRIi32"\n", th->pack_type);
   printf("Packet number of samples:\t%"PRIi32"\n", th->pack_numsamps);
   printf("Total samples sent so far:\t%"PRIi64"\n", th->pack_totalsamps);
   //printf("Total samples sent so far:\t%.06lli\n", th->pack_totalsamps);
   printf("Packet time:\t\t\t%f\n", th->pack_time);
   //  printf("Packet time in hex:\t%4.4LA\n", th->pack_time);
-  printf("Sync channel num samples:\t%"PRIi32"\n", th->sync_numsamps);
+  printf("Sync channel num samples:\t%"PRIi32"\n", th->chan0_numsamps);
   return EXIT_SUCCESS;
 }
 
@@ -425,7 +440,7 @@ int print_raw_tcp_header(struct tcp_header *th){
 
   //  size_t hdrsz = sizeof(struct tcp_header);
   int hdrsz = sizeof(th->start_str) + sizeof(th->pack_sz) + sizeof(th->pack_type) + 
-    sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->sync_numsamps);
+    sizeof(th->pack_numsamps) + sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->chan0_numsamps);
   printf("\n*************\n");
   printf("Raw TCP header (%i bytes):\n", hdrsz );
 
@@ -471,10 +486,10 @@ int print_header_memberszinfo(struct tcp_header *th){
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_numsamps:\t%lu\n", sizeof(th->pack_numsamps));
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof totalsamps:\t%lu\n", sizeof(th->pack_totalsamps));
   printf("tcp_utils.c [print_header_memberszinfo()] sizeof pack_time:\t%lu\n", sizeof(th->pack_time));
-  printf("tcp_utils.c [print_header_memberszinfo()] sizeof sync_numsamps:\t%lu\n", sizeof(th->sync_numsamps));
+  printf("tcp_utils.c [print_header_memberszinfo()] sizeof chan0_numsamps:\t%lu\n", sizeof(th->chan0_numsamps));
   printf("tcp_utils.c [print_header_memberszinfo()] total header size: %lu\n", sizeof(th->start_str) + 
 	 sizeof(th->pack_sz) + sizeof(th->pack_type) + sizeof(th->pack_numsamps) + 
-	 sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->sync_numsamps));
+	 sizeof(th->pack_totalsamps) + sizeof(th->pack_time) + sizeof(th->chan0_numsamps));
   return EXIT_SUCCESS;
  
 }
@@ -780,12 +795,12 @@ int update_chans_post_parse(struct dewe_chan *c, struct tcp_header *th, struct t
   //get number of samples for this channel
   //  
   //  if( c->num == 0 ) {
-  c->numsamps = th->sync_numsamps;
-  c->tot_numsamps += th->sync_numsamps;
+  c->numsamps = th->chan0_numsamps;
+  c->tot_numsamps += th->chan0_numsamps;
   //}
   //else {
   //  //this is bogus, but I don't know another solution right now
-  //  c->numsamps = th->sync_numsamps;
+  //  c->numsamps = th->chan0_numsamps;
   //  if ( chanheader_is_in_this_buff ) {
   //    c->numsamps =  *((int32_t *)(buf_addr+p->bufpos));
   //  }
@@ -1204,7 +1219,57 @@ int combine_and_write_chandata_buff( struct dewe_chan *c1 , struct dewe_chan *c2
   return EXIT_SUCCESS;
 }
 
+int write_chan_samples_hs(struct dewe_chan *c, struct tcp_parser_hs *p, bool RxDSP_single_tstamp ){
 
+  unsigned int *c_buffstart;
+  int64_t *c_tstamp_buffstart;
+  long int numsamps;
+  size_t dsize;
+  
+  FILE *outfile = c->outfile;
+  FILE *ts_file;
+
+  //initialize everyone
+  c_buffstart = (unsigned int *)c->packaddr;
+  if( c->is_asynchr ) c_tstamp_buffstart = (int64_t *)c->tstamps_addr;
+  numsamps = c->numsamps;
+  dsize = c->dsize;
+  if( c->is_asynchr ) {
+    ts_file = c->ts_file;
+  }
+  else {
+    ts_file = c->outfile;
+  }
+
+  if( DEBUG ) {
+    printf("tcp_utils.c [write_chan_samples_hs()] Channel:\t\t\t%i\n", c->num );
+    printf("tcp_utils.c [write_chan_samples_hs()] Single tstamp file:\t%i\n", RxDSP_single_tstamp);
+  }
+
+  //Now get to work
+  if( c->numsamps == 0 ) {
+    if( DEBUG ) printf("tcp_utils.c [write_chan_samples_hs()] Doing new data with zero samps...poor logic\n");
+    return EXIT_FAILURE;
+  }
+
+  if( c_buffstart != NULL ){
+    fwrite( c_buffstart, dsize, numsamps, outfile);
+    if( c->is_asynchr ) fwrite( c_tstamp_buffstart, 8, numsamps, ts_file );
+  }
+  else {
+    printf("tcp_utils.c [write_chan_data()] You just tried to slip me a null pointer! You code like a graduate student.\n");
+    return EXIT_FAILURE;
+  }
+  
+  if( DEF_VERBOSE ) printf("Wrote %li samps (%li bytes) to file\n", numsamps, numsamps * dsize );
+  c->packs_tofile += 1;
+  
+  return EXIT_SUCCESS;
+
+}
+
+/* int write_tstamp_samples_hs(struct dewe_chan *c, struct tcp_parser_hs *p, bool RxDSP_single_tstamp){ */
+/* } */
 
 //NOT FINISHED! Position reporting isn't clear yet
 int print_chan_info(struct dewe_chan *c){
