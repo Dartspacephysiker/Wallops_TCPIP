@@ -66,11 +66,11 @@ void tcp_play_hs(struct player_opt o)
 {
   
   time_t pg_time;
-  int tret, ret, rtdsize = 0;
+  int tret, ret, rtdframesize = 0;
   struct tcp_player_ptargs *thread_args;
   pthread_t *data_threads;
     
-  int num_rtds = o.num_ports * o.nchan;
+  int num_rtds;
   short int **rtdframe_pp = NULL, *rtdout = NULL;
   pthread_mutex_t *rtdlocks;
 
@@ -90,9 +90,14 @@ void tcp_play_hs(struct player_opt o)
   if( (o.verbose) || (o.debug) ) printf("Number of ports: %i\n",o.num_ports);
   if(o.sleeptime) printf("Sleeping %u microsec between acquisitions...\n",o.sleeptime);
 
+  //We only need one thread for each port, and one set of arguments for each thread
   data_threads = malloc(o.num_ports * sizeof(pthread_t));
   thread_args = malloc(o.num_ports * sizeof(struct tcp_player_ptargs));
 
+  //Each port can have multiple channels, we want an rtd frame for each channel.
+  //The total number of rtds is the number of ports times the number of channels
+  //on each port.
+  num_rtds = o.num_ports * o.nchan;
   rtdlocks = malloc(num_rtds*sizeof(pthread_mutex_t));
   rtdframe_pp = malloc(num_rtds*sizeof(short int *));
   //  rtdframe_pp = malloc(o.num_ports * sizeof(short int *));
@@ -100,24 +105,25 @@ void tcp_play_hs(struct player_opt o)
   if (o.dt > 0) {
     printf("RTD");
     
-    rtdsize = o.rtdsize * sizeof(short int);
-    if (rtdsize > 2*o.revbufsize) printf("RTD Total Size too big!\n");
+    rtdframesize = o.rtdsize * sizeof(short int);
+    if (rtdframesize > 2*o.revbufsize) printf("RTD Total Size too big!\n");
     else printf(" (%i", o.rtdsize);
-    if (1024*o.rtdavg > rtdsize) printf("Too many averages for given RTD size.\n");
+    if (1024*o.rtdavg > rtdframesize) printf("Too many averages for given RTD size.\n");
     else printf("/%iavg)", o.rtdavg);
     printf("...");
     
-    rtdout = malloc(num_rtds * rtdsize);
+    //rtdout needs to b
+    rtdout = malloc(num_rtds * rtdframesize);
     
     if ((rtdframe_pp == NULL) || (rtdout == NULL)) {
       printe("RTD mallocs failed.\n");
     }
     
     /* for (int i = 0; i < o.num_ports; i++) { */
-    /*   rtdframe_pp[i] = malloc(rtdsize); */
+    /*   rtdframe_pp[i] = malloc(rtdframesize); */
     /* } */
     for (int i = 0; i < num_rtds; i++) {
-      rtdframe_pp[i] = malloc(rtdsize);
+      rtdframe_pp[i] = malloc(rtdframesize);
       if ( o.debug ) printf("Malloc'ed stuff for rtdframe %i\n",i);
     }
     
@@ -134,12 +140,16 @@ void tcp_play_hs(struct player_opt o)
     if ((fstat(rfd, &sb) == -1) || (!S_ISREG(sb.st_mode))) {
       printe("Improper rtd file.\n"); return;
     }    
+
+    //The size of the header used by complex_proc (RxDSP data) and
+    // the header used by prtd (digitizer data) are different, which
+    // is reflected in the different mapsizes below.
     int mapsize;
     if(o.digitizer_data) {
-      mapsize = num_rtds*rtdsize + 72;
+      mapsize = num_rtds*rtdframesize + 72;
     }
     else {
-      mapsize = num_rtds*rtdsize + 100;
+      mapsize = num_rtds*rtdframesize + 100;
     }
     char *zeroes = malloc(mapsize);
     memset(zeroes, 0, mapsize);
@@ -192,17 +202,19 @@ void tcp_play_hs(struct player_opt o)
     thread_args[i].o = o;
     thread_args[i].retval = 0;
     thread_args[i].running = &running;
+    thread_args[i].time = pg_time;
+
     //    thread_args[i].rtdframe = rtdframe_pp[i];
     for(int j = 0; j < o.nchan; j++) {
 
-      ret = pthread_mutex_init(&rtdlocks[i*o.num_ports+j], NULL);
+      int ind = i*o.num_ports + j;
+      ret = pthread_mutex_init(&rtdlocks[ind], NULL);
       if (ret) {
 	printe("RTD mutex init failed: %i.\n", ret); exit(EEPP_THREAD);
       }
       
-      thread_args[i].rtdframe[j] = rtdframe_pp[i*o.num_ports+j];
-      thread_args[i].rlock[j] = &rtdlocks[i*o.num_ports+j];
-      thread_args[i].time[j] = pg_time;
+      thread_args[i].rtdframe[j] = rtdframe_pp[ind];
+      thread_args[i].rlock[j] = &rtdlocks[ind];
     }
 
     
@@ -215,12 +227,12 @@ void tcp_play_hs(struct player_opt o)
   
   if (o.debug) {
     if (!o.digitizer_data){
-      printf("Size of header: %lu, rtdsize: %i, o.num_ports: %i.\n", 
-	     sizeof( struct header_info ), rtdsize, o.num_ports);
+      printf("Size of header: %lu, rtdframesize: %i, o.num_ports: %i.\n", 
+	     sizeof( struct header_info ), rtdframesize, o.num_ports);
     }
     else {
-      printf("Size of header: %lu, rtdsize: %i, o.num_ports: %i.\n", 
-	     sizeof( struct prtd_header_info ), rtdsize, o.num_ports);
+      printf("Size of header: %lu, rtdframesize: %i, o.num_ports: %i.\n", 
+	     sizeof( struct prtd_header_info ), rtdframesize, o.num_ports);
     }
   }
   /*
@@ -238,15 +250,15 @@ void tcp_play_hs(struct player_opt o)
 	 */
 	for (int i = 0; i < o.num_ports; i++) {
 	  for(int j = 0; j < o.nchan; j++) {
-
-	    pthread_mutex_lock(&rtdlocks[i*o.num_ports + j]); //lock 'er up
+	    int ind = i*o.num_ports + j;
+	    pthread_mutex_lock(&rtdlocks[ind]); //lock 'er up
 
 	    //move it in
-	    //PROBLEM LINE BELOW
-	    memmove(&rtdout[(i*o.num_ports+j)*o.rtdsize], rtdframe_pp[i*o.num_ports+j], rtdsize);
-
+	    memmove(&rtdout[(ind)*o.rtdsize], rtdframe_pp[ind], rtdframesize);
+	    if ( o.debug ) { printf("RTD frame #%i: Moved %i bytes starting at location %i/%i in rtdout\n",ind,rtdframesize,ind*o.rtdsize,o.rtdsize*num_rtds);
+	    }
 	    //open again
-	    pthread_mutex_unlock(&rtdlocks[i*o.num_ports + j]);
+	    pthread_mutex_unlock(&rtdlocks[ind]);
 	  }
 	}
 
@@ -256,14 +268,14 @@ void tcp_play_hs(struct player_opt o)
 	  rtdh.cprtd.averages = o.rtdavg;
 
 	  memmove(rmap, &rtdh.cprtd, sizeof(struct header_info));
-	  memmove(rmap+102, rtdout, rtdsize*o.num_ports);
+	  memmove(rmap+102, rtdout, rtdframesize*num_rtds);
 	}
 	else {
 	  rtdh.prtd.start_time = time(NULL);
 	  rtdh.prtd.start_timeval = now;
 
 	  memmove(rmap, &rtdh.prtd, sizeof(struct prtd_header_info));
-	  memmove(rmap+74, rtdout, rtdsize*o.num_ports);
+	  memmove(rmap+74, rtdout, rtdframesize*num_rtds);
 	}
 	then = now;
       }
@@ -428,7 +440,7 @@ void *tcp_play_hs_data_pt(void *threadarg)
   //  strcpy(fifo_srch,"Dartmouth College");
 
   //outfile string
-  gmtime_r(&arg.time[0], &ct);
+  gmtime_r(&arg.time, &ct);
   sprintf(ostr, "%s/%s-%04i%02i%02i-%02i%02i%02i-p%u", arg.o.outdir, arg.o.prefix,
 	  ct.tm_year+1900, ct.tm_mon+1, ct.tm_mday, ct.tm_hour, ct.tm_min, ct.tm_sec, arg.port);
 

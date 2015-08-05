@@ -43,7 +43,7 @@ struct player_opt {
 struct tcp_player_ptargs {
   struct player_opt o;
 
-  time_t time[MAX_NUMCHANS];
+  time_t time;
   bool *running;
   int retval;
   unsigned int port;

@@ -176,12 +176,15 @@ void tcp_play(struct player_opt o) {
     }
     
 
+    //rtdframe, rlock, and time have index 0 because, for tcp_player_highspeed,
+    // it became necessary to have the ability to do multiple rtds (i.e., multiple channels,
+    // on the same thread.
     printf("Port %u...", o.ports[i]); fflush(stdout);
     thread_args[i].o = o;
     thread_args[i].retval = 0;
     thread_args[i].running = &running;
-    thread_args[i].rtdframe = rtdframe[i];
-    thread_args[i].rlock = &rtdlocks[i];
+    thread_args[i].rtdframe[0] = rtdframe[i];
+    thread_args[i].rlock[0] = &rtdlocks[i];
     thread_args[i].time = pg_time;
     
     ret = pthread_create(&data_threads[i], NULL, tcp_player_data_pt, (void *) &thread_args[i]);
@@ -793,14 +796,14 @@ void *tcp_player_data_pt(void *threadarg) {
 	    fifo_kill(fifo, fifo_loc);
 	    fifo_read(fifo_outbytes, fifo, rtdbytes);
 	    
-	    pthread_mutex_lock(arg.rlock);
+	    pthread_mutex_lock(arg.rlock[0]);
 	    
 	    if (arg.o.debug) {
 	      printf("Port %u rtd moving rtdbytes %i from cfb %p to rtdb %p with %lu avail.\n",
-		     arg.port, rtdbytes, buff, arg.rtdframe, count);
+		     arg.port, rtdbytes, buff, arg.rtdframe[0], count);
 	    }
-	    memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
-	    pthread_mutex_unlock(arg.rlock);
+	    memmove(arg.rtdframe[0], fifo_outbytes, rtdbytes);
+	    pthread_mutex_unlock(arg.rlock[0]);
 	  }
 	  else {
 	    fprintf(stderr,"Search for \"aDtromtu hoCllge\" failed!!\nNo rtd output...\n");
@@ -813,13 +816,13 @@ void *tcp_player_data_pt(void *threadarg) {
 	  //read it
 	  fifo_read(fifo_outbytes, fifo, rtdbytes);
 
-	  pthread_mutex_lock(arg.rlock);
+	  pthread_mutex_lock(arg.rlock[0]);
 	  if (arg.o.debug) {
 	    printf("Port %i rtd moving rtdbytes %i from cfb %p to rtdb %p with %li avail.\n",
-		   arg.port, rtdbytes, buff, arg.rtdframe, fifo_avail(fifo) );
+		   arg.port, rtdbytes, buff, arg.rtdframe[0], fifo_avail(fifo) );
 	  }
-	  memmove(arg.rtdframe, fifo_outbytes, rtdbytes);
-	  pthread_mutex_unlock(arg.rlock);
+	  memmove(arg.rtdframe[0], fifo_outbytes, rtdbytes);
+	  pthread_mutex_unlock(arg.rlock[0]);
 	}	  	
       }
     }
